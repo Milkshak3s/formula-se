@@ -4,6 +4,7 @@ import { api, ApiError } from "../api/client";
 import { useAuth } from "../auth";
 import { Badge, Card, EmptyState, Modal, PageHeader, Spinner } from "../components/ui";
 import { ValidationReportView } from "../components/ValidationReport";
+import { useToast } from "../components/toast";
 import type { Slot, ValidationReport } from "../api/types";
 
 export default function SlotsPage() {
@@ -12,6 +13,7 @@ export default function SlotsPage() {
   const slots = useQuery({ queryKey: ["slots"], queryFn: api.listSlots });
   const classes = useQuery({ queryKey: ["ship-classes"], queryFn: api.listShipClasses });
   const [uploadSlot, setUploadSlot] = useState<Slot | null>(null);
+  const [historySlot, setHistorySlot] = useState<Slot | null>(null);
   const [creating, setCreating] = useState(false);
 
   const isAdmin = hasRole("admin");
@@ -63,12 +65,21 @@ export default function SlotsPage() {
                         {bp ? <Badge tone="good">Filled</Badge> : <Badge>Empty</Badge>}
                       </div>
                       {bp ? (
-                        <div className="mt-3 text-sm text-muted space-y-1">
-                          <div className="font-medium text-ink">{bp.name}</div>
-                          <div className="flex gap-3 flex-wrap text-xs">
-                            <span>{bp.stats?.block_count ?? "?"} blocks</span>
-                            <span>{bp.stats?.pcu ?? "?"} PCU</span>
-                            <span>{bp.stats?.weapon_count ?? 0} weapons</span>
+                        <div className="mt-3 flex gap-3">
+                          {bp.has_thumbnail && (
+                            <img
+                              src={api.thumbnailUrl(bp.id)}
+                              alt=""
+                              className="h-16 w-16 rounded-lg border border-border object-cover bg-cream shrink-0"
+                            />
+                          )}
+                          <div className="text-sm text-muted space-y-1 min-w-0">
+                            <div className="font-medium text-ink truncate">{bp.name}</div>
+                            <div className="flex gap-3 flex-wrap text-xs">
+                              <span>{bp.stats?.block_count ?? "?"} blocks</span>
+                              <span>{bp.stats?.pcu ?? "?"} PCU</span>
+                              <span>{bp.stats?.weapon_count ?? 0} weapons</span>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -91,6 +102,12 @@ export default function SlotsPage() {
                             Download
                           </button>
                         )}
+                        <button
+                          className="btn-ghost text-xs py-1.5"
+                          onClick={() => setHistorySlot(s)}
+                        >
+                          History
+                        </button>
                         {isAdmin && bp && (
                           <button
                             className="text-xs text-muted hover:text-bad ml-auto self-center"
@@ -126,6 +143,9 @@ export default function SlotsPage() {
           }}
         />
       )}
+      {historySlot && (
+        <HistoryModal slot={historySlot} onClose={() => setHistorySlot(null)} />
+      )}
       {creating && (
         <CreateSlotModal
           classes={(classes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
@@ -149,6 +169,7 @@ function UploadModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<ValidationReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,11 +178,13 @@ function UploadModal({
     mutationFn: () => api.uploadBlueprint(slot.id, file!),
     onSuccess: (res) => {
       setReport(res.report ?? res);
+      toast(`Blueprint accepted for ${slot.name}.`, "success");
       onDone();
     },
     onError: (e: any) => {
       if (e instanceof ApiError && e.status === 422) {
         setReport(e.body as ValidationReport);
+        toast("Validation failed — see the checklist.", "error");
       } else {
         setError(e.message);
       }
@@ -200,6 +223,57 @@ function UploadModal({
             {upload.isPending ? "Validating…" : "Upload & validate"}
           </button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+function HistoryModal({ slot, onClose }: { slot: Slot; onClose: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["slot-history", slot.id],
+    queryFn: () => api.slotHistory(slot.id),
+  });
+
+  const statusTone = (s: string) =>
+    s === "active" ? "good" : s === "replaced" ? "amber" : "neutral";
+
+  return (
+    <Modal open onClose={onClose} title={`Upload history — ${slot.name}`}>
+      {isLoading ? (
+        <Spinner label="Loading history…" />
+      ) : !data?.length ? (
+        <p className="text-muted text-sm">No uploads yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {data.map((h) => (
+            <li key={h.id} className="flex items-center gap-3 rounded-xl border border-border p-3">
+              {h.has_thumbnail ? (
+                <img
+                  src={api.thumbnailUrl(h.id)}
+                  alt=""
+                  className="h-12 w-12 rounded-lg border border-border object-cover bg-cream shrink-0"
+                />
+              ) : (
+                <div className="h-12 w-12 rounded-lg bg-cream shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm truncate">{h.name}</span>
+                  <Badge tone={statusTone(h.status) as any}>{h.status}</Badge>
+                </div>
+                <div className="text-xs text-muted mt-0.5">
+                  {h.stats?.pcu ?? "?"} PCU · {h.stats?.block_count ?? "?"} blocks ·{" "}
+                  {h.uploader_name ?? "unknown"} · {new Date(h.created_at).toLocaleString()}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex justify-end mt-4">
+        <button className="btn-ghost" onClick={onClose}>
+          Close
+        </button>
       </div>
     </Modal>
   );

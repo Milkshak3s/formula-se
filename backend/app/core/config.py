@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="postgresql+psycopg://formulase:formulase@localhost:5432/formulase"
     )
+    # In dev we create tables on startup for zero-setup convenience. In Docker/
+    # prod this is false and schema is managed by `alembic upgrade head`.
+    auto_create_tables: bool = Field(default=True)
 
     # --- Auth / sessions ---
     session_cookie_name: str = "formulase_session"
@@ -57,6 +60,14 @@ class Settings(BaseSettings):
 
     # --- Dedicated server push (feature flag) ---
     server_push_enabled: bool = Field(default=False)
+    # Which WorldDeliverer implementation to use: "download" (no-op, default) or
+    # "sftp". SFTP is only usable when server_push_enabled is on.
+    deliverer: str = Field(default="download")
+    sftp_host: str | None = Field(default=None)
+    sftp_port: int = Field(default=22)
+    sftp_username: str | None = Field(default=None)
+    sftp_password: str | None = Field(default=None)
+    sftp_remote_dir: str = Field(default="/saves")
 
     # --- Block data seed ---
     block_definitions_seed: str = Field(default="data/block_definitions.json")

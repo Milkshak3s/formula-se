@@ -99,9 +99,34 @@ frontend/
 docker-compose.yml
 ```
 
+## Schema & migrations
+
+Schema is managed by **Alembic**. In Docker a one-shot `migrate` service runs
+`alembic upgrade head` before `api`/`worker` start (`AUTO_CREATE_TABLES=false`).
+For quick local dev the app still `create_all`s on startup by default
+(`AUTO_CREATE_TABLES=true`); run `alembic upgrade head` instead if you prefer
+migration-managed local schema. To evolve the schema:
+
+```bash
+cd backend
+alembic revision --autogenerate -m "describe change"
+alembic upgrade head
+```
+
+## Dedicated-server push (optional)
+
+Prepared worlds are always downloadable. When `SERVER_PUSH_ENABLED=true` and
+`DELIVERER=sftp` (with `SFTP_HOST`/`SFTP_USERNAME`/`SFTP_PASSWORD`/
+`SFTP_REMOTE_DIR`), Commanders also get a **Push to server** action that uploads
+the save over SFTP via the `WorldDeliverer` interface. `download` (no-op) is the
+default; other transports (panel API / Torch) can be added as new deliverers.
+
 ## Status
 
-MVP milestones 1–5 are implemented end-to-end and covered by unit tests plus a
-full API smoke test (auth → validation → world prep → download). Remaining:
-Alembic migration authoring (dev uses `create_all`), design polish (milestone 6),
-and a concrete dedicated-server `WorldDeliverer` (deferred behind a flag).
+All six MVP milestones are implemented end-to-end: auth/roles, ship classes +
+requirement engine, blueprint slots with upload validation + audit history +
+thumbnails, game maps + start-slot editor, the start-a-world wizard with
+background world preparation and downloads, and a design pass (fonts, toasts,
+favicon). Covered by 23 unit tests plus verified end-to-end API flows. The only
+deliberately out-of-scope item is real Backblaze B2 verification (the S3 client
+is wired but untested against a live bucket; local-disk storage is used in dev).

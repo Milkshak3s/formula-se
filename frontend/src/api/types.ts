@@ -45,6 +45,17 @@ export interface Blueprint {
   stats: Record<string, any>;
   status: string;
   created_at: string;
+  has_thumbnail: boolean;
+}
+
+export interface BlueprintHistory {
+  id: string;
+  name: string;
+  status: string;
+  stats: Record<string, any>;
+  uploader_name: string | null;
+  has_thumbnail: boolean;
+  created_at: string;
 }
 
 export interface Slot {

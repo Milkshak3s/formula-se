@@ -25,8 +25,10 @@ from app.seed import run_seeds
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # In dev without Alembic, create tables and run seeds on startup.
-    Base.metadata.create_all(bind=engine)
+    # In dev, create tables for zero-setup convenience; in prod Alembic owns the
+    # schema (AUTO_CREATE_TABLES=false). Seeds always run (idempotent).
+    if settings.auto_create_tables:
+        Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         run_seeds(db)

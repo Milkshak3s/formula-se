@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import Enum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -79,6 +79,16 @@ class BlueprintSlot(UUIDPk, Timestamped, Base):
 
 class Blueprint(UUIDPk, Timestamped, Base):
     __tablename__ = "blueprints"
+    __table_args__ = (
+        # Enforce at most one ACTIVE blueprint per slot at the DB level;
+        # replaced/cleared rows are kept as audit history (PLAN §5).
+        Index(
+            "uq_blueprint_active_per_slot",
+            "slot_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
 
     slot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -100,3 +110,7 @@ class Blueprint(UUIDPk, Timestamped, Base):
     )
 
     slot: Mapped[BlueprintSlot] = relationship(back_populates="blueprints")
+
+    @property
+    def has_thumbnail(self) -> bool:
+        return bool(self.thumb_b2_key)

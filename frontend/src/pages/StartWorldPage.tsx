@@ -2,11 +2,13 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { useToast } from "../components/toast";
 import { Card, EmptyState, PageHeader, Spinner } from "../components/ui";
 import type { GameMap, Slot } from "../api/types";
 
 export default function StartWorldPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const maps = useQuery({ queryKey: ["maps"], queryFn: api.listMaps });
   const slots = useQuery({ queryKey: ["slots"], queryFn: api.listSlots });
 
@@ -31,7 +33,10 @@ export default function StartWorldPage() {
           .filter(([, slotId]) => slotId)
           .map(([start_slot_id, slot_id]) => ({ start_slot_id, slot_id })),
       }),
-    onSuccess: () => navigate("/prepared-worlds"),
+    onSuccess: () => {
+      toast("World queued — preparing your save.", "success");
+      navigate("/prepared-worlds");
+    },
   });
 
   if (maps.isLoading || slots.isLoading) return <Spinner label="Loading…" />;

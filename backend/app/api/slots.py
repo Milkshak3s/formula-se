@@ -12,7 +12,7 @@ from app.core.deps import get_current_user, require_admin, require_engineer
 from app.models.enums import BlueprintStatus
 from app.models.ship import Blueprint, BlueprintSlot, ShipClass
 from app.models.user import User
-from app.schemas.ship import BlueprintOut, SlotCreate, SlotOut
+from app.schemas.ship import BlueprintHistoryOut, BlueprintOut, SlotCreate, SlotOut
 from app.services.blockdata import build_lookup
 from app.services.seformat.blueprint import (
     BlueprintParseError,
@@ -189,3 +189,33 @@ def clear_slot(
         if bp.status == BlueprintStatus.active:
             bp.status = BlueprintStatus.cleared
     db.commit()
+
+
+@router.get("/{slot_id}/blueprints", response_model=list[BlueprintHistoryOut])
+def slot_history(
+    slot_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Full upload history for a slot (active + replaced + cleared) so overwrites
+    are visible, most recent first (PLAN §3.3)."""
+    if db.get(BlueprintSlot, slot_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Slot not found")
+    rows = db.execute(
+        select(Blueprint, User.display_name)
+        .outerjoin(User, Blueprint.uploader_id == User.id)
+        .where(Blueprint.slot_id == slot_id)
+        .order_by(Blueprint.created_at.desc())
+    ).all()
+    return [
+        BlueprintHistoryOut(
+            id=bp.id,
+            name=bp.name,
+            status=bp.status,
+            stats=bp.stats,
+            uploader_name=uploader_name,
+            has_thumbnail=bp.has_thumbnail,
+            created_at=bp.created_at,
+        )
+        for bp, uploader_name in rows
+    ]

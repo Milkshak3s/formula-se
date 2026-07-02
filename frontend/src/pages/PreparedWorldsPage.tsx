@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { useAuth } from "../auth";
+import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, PageHeader, Spinner } from "../components/ui";
 import type { PreparedWorld, PreparedWorldStatus } from "../api/types";
 
@@ -12,6 +14,12 @@ const STATUS_TONE: Record<PreparedWorldStatus, "neutral" | "good" | "bad" | "amb
 };
 
 export default function PreparedWorldsPage() {
+  const toast = useToast();
+  const { hasRole } = useAuth();
+  const canPush = hasRole("commander");
+  const push = useQuery({ queryKey: ["public-settings"], queryFn: api.publicSettings });
+  const showPush = canPush && push.data?.server_push_enabled;
+
   const { data, isLoading } = useQuery({
     queryKey: ["prepared-worlds"],
     queryFn: api.listPreparedWorlds,
@@ -25,8 +33,21 @@ export default function PreparedWorldsPage() {
   });
 
   const download = async (id: string) => {
-    const { url } = await api.downloadPreparedWorld(id);
-    window.open(url, "_blank");
+    try {
+      const { url } = await api.downloadPreparedWorld(id);
+      window.open(url, "_blank");
+    } catch (e: any) {
+      toast(e.message ?? "Download failed", "error");
+    }
+  };
+
+  const deliver = async (id: string) => {
+    try {
+      const res = await api.deliverPreparedWorld(id);
+      toast(res.detail, res.delivered ? "success" : "error");
+    } catch (e: any) {
+      toast(e.message ?? "Push failed", "error");
+    }
   };
 
   return (
@@ -52,6 +73,11 @@ export default function PreparedWorldsPage() {
                 {w.status === "ready" && (
                   <button className="btn-primary text-xs py-1.5" onClick={() => download(w.id)}>
                     Download
+                  </button>
+                )}
+                {w.status === "ready" && showPush && (
+                  <button className="btn-ghost text-xs py-1.5" onClick={() => deliver(w.id)}>
+                    Push to server
                   </button>
                 )}
               </div>

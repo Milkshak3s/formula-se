@@ -150,5 +150,5 @@ def deliver_prepared(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Prepared world not found")
     if pw.status != PreparedWorldStatus.ready or not pw.b2_key:
         raise HTTPException(status.HTTP_409_CONFLICT, "Prepared world is not ready")
-    result = get_deliverer().deliver(str(pw.id), pw.b2_key)
+    result = get_deliverer().deliver(str(pw.id), pw.b2_key, f"{pw.name}.zip")
     return {"delivered": result.delivered, "detail": result.detail}

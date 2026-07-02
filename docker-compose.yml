@@ -13,11 +13,23 @@ services:
       timeout: 3s
       retries: 10
 
+  # One-shot: apply Alembic migrations, then exit. api/worker wait on this.
+  migrate:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://formulase:formulase@postgres:5432/formulase
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: alembic upgrade head
+
   api:
     build:
       context: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://formulase:formulase@postgres:5432/formulase
+      AUTO_CREATE_TABLES: "false"
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@formula.se}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-changeme123}
       DEFAULT_INVITE_CODE: ${DEFAULT_INVITE_CODE:-FORMULA-SE}
@@ -26,11 +38,20 @@ services:
       B2_APPLICATION_KEY: ${B2_APPLICATION_KEY:-}
       B2_BUCKET: ${B2_BUCKET:-formula-se}
       LOCAL_STORAGE_DIR: /data/storage
+      SERVER_PUSH_ENABLED: ${SERVER_PUSH_ENABLED:-false}
+      DELIVERER: ${DELIVERER:-download}
+      SFTP_HOST: ${SFTP_HOST:-}
+      SFTP_PORT: ${SFTP_PORT:-22}
+      SFTP_USERNAME: ${SFTP_USERNAME:-}
+      SFTP_PASSWORD: ${SFTP_PASSWORD:-}
+      SFTP_REMOTE_DIR: ${SFTP_REMOTE_DIR:-}
     volumes:
       - storage:/data/storage
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   worker:
@@ -38,6 +59,7 @@ services:
       context: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://formulase:formulase@postgres:5432/formulase
+      AUTO_CREATE_TABLES: "false"
       B2_ENDPOINT_URL: ${B2_ENDPOINT_URL:-}
       B2_KEY_ID: ${B2_KEY_ID:-}
       B2_APPLICATION_KEY: ${B2_APPLICATION_KEY:-}
@@ -48,6 +70,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     command: python -m app.worker
 
   caddy:

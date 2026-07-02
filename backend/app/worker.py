@@ -10,8 +10,9 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.models.enums import PreparedWorldStatus
 from app.models.world import PreparedWorld
@@ -92,7 +93,8 @@ def run_janitor() -> None:
 
 
 def main() -> None:
-    Base.metadata.create_all(bind=engine)
+    if settings.auto_create_tables:
+        Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         run_seeds(db)

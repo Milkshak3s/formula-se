@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -39,3 +40,24 @@ def download_blueprint(
     storage = get_storage()
     name = f"{bp.name or 'blueprint'}.zip"
     return {"url": storage.presigned_url(bp.b2_key, download_name=name)}
+
+
+@router.get("/{blueprint_id}/thumbnail")
+def blueprint_thumbnail(
+    blueprint_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Proxy the blueprint's thumbnail PNG from storage (works for B2 + local)."""
+    bp = db.get(Blueprint, blueprint_id)
+    if bp is None or not bp.thumb_b2_key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No thumbnail")
+    try:
+        data = get_storage().get(bp.thumb_b2_key)
+    except FileNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No thumbnail") from exc
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )

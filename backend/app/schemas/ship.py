@@ -49,6 +49,19 @@ class BlueprintOut(BaseModel):
     stats: dict[str, Any]
     status: BlueprintStatus
     created_at: datetime
+    has_thumbnail: bool = False
+
+
+class BlueprintHistoryOut(BaseModel):
+    """A slot's upload history row — makes overwrites visible (PLAN §3.3)."""
+
+    id: uuid.UUID
+    name: str
+    status: BlueprintStatus
+    stats: dict[str, Any]
+    uploader_name: str | None
+    has_thumbnail: bool
+    created_at: datetime
 
 
 class SlotCreate(BaseModel):
