@@ -123,11 +123,6 @@ export const api = {
   }) => request<PreparedWorld>("/api/prepared-worlds", { method: "POST", ...json(data) }),
   downloadPreparedWorld: (id: string) =>
     request<{ url: string }>(`/api/prepared-worlds/${id}/download`),
-  deliverPreparedWorld: (id: string) =>
-    request<{ delivered: boolean; detail: string }>(
-      `/api/prepared-worlds/${id}/deliver`,
-      { method: "POST" },
-    ),
 
   // --- block data ---
   blockDataStats: () => request<BlockDataStats>("/api/block-definitions"),
@@ -138,8 +133,6 @@ export const api = {
   },
 
   // --- settings ---
-  publicSettings: () =>
-    request<{ server_push_enabled: boolean }>("/api/settings/public"),
   getSettings: () => request<AppSettings>("/api/settings"),
   updateSettings: (data: Partial<AppSettings>) =>
     request<AppSettings>("/api/settings", { method: "PATCH", ...json(data) }),

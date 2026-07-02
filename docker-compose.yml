@@ -38,13 +38,6 @@ services:
       B2_APPLICATION_KEY: ${B2_APPLICATION_KEY:-}
       B2_BUCKET: ${B2_BUCKET:-formula-se}
       LOCAL_STORAGE_DIR: /data/storage
-      SERVER_PUSH_ENABLED: ${SERVER_PUSH_ENABLED:-false}
-      DELIVERER: ${DELIVERER:-download}
-      SFTP_HOST: ${SFTP_HOST:-}
-      SFTP_PORT: ${SFTP_PORT:-22}
-      SFTP_USERNAME: ${SFTP_USERNAME:-}
-      SFTP_PASSWORD: ${SFTP_PASSWORD:-}
-      SFTP_REMOTE_DIR: ${SFTP_REMOTE_DIR:-}
     volumes:
       - storage:/data/storage
     depends_on:

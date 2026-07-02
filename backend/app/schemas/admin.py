@@ -20,10 +20,6 @@ class SettingsOut(BaseModel):
     server_push_enabled: bool
 
 
-class PublicSettings(BaseModel):
-    server_push_enabled: bool
-
-
 class SettingsUpdate(BaseModel):
     invite_code: str | None = None
     server_push_enabled: bool | None = None

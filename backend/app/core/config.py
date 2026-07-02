@@ -59,15 +59,9 @@ class Settings(BaseSettings):
     prepared_world_ttl_hours: int = 24
 
     # --- Dedicated server push (feature flag) ---
+    # Reserved plumbing: MVP ships download only. A concrete WorldDeliverer can
+    # be added later behind this flag (see app/services/deliverers).
     server_push_enabled: bool = Field(default=False)
-    # Which WorldDeliverer implementation to use: "download" (no-op, default) or
-    # "sftp". SFTP is only usable when server_push_enabled is on.
-    deliverer: str = Field(default="download")
-    sftp_host: str | None = Field(default=None)
-    sftp_port: int = Field(default=22)
-    sftp_username: str | None = Field(default=None)
-    sftp_password: str | None = Field(default=None)
-    sftp_remote_dir: str = Field(default="/saves")
 
     # --- Block data seed ---
     block_definitions_seed: str = Field(default="data/block_definitions.json")

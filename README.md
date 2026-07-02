@@ -113,13 +113,14 @@ alembic revision --autogenerate -m "describe change"
 alembic upgrade head
 ```
 
-## Dedicated-server push (optional)
+## World delivery
 
-Prepared worlds are always downloadable. When `SERVER_PUSH_ENABLED=true` and
-`DELIVERER=sftp` (with `SFTP_HOST`/`SFTP_USERNAME`/`SFTP_PASSWORD`/
-`SFTP_REMOTE_DIR`), Commanders also get a **Push to server** action that uploads
-the save over SFTP via the `WorldDeliverer` interface. `download` (no-op) is the
-default; other transports (panel API / Torch) can be added as new deliverers.
+Prepared worlds are always downloadable as a zip — the guaranteed path. Delivery
+is abstracted behind a `WorldDeliverer` interface (`app/services/deliverers`)
+with only the no-op `DownloadDeliverer` wired up; a `POST /prepared-worlds/{id}/
+deliver` endpoint and a `server_push_enabled` flag are reserved as plumbing.
+Pushing saves to a dedicated server is intentionally **not** built here — the
+plan is a separate SE client app that polls for world starts.
 
 ## Status
 
@@ -127,6 +128,6 @@ All six MVP milestones are implemented end-to-end: auth/roles, ship classes +
 requirement engine, blueprint slots with upload validation + audit history +
 thumbnails, game maps + start-slot editor, the start-a-world wizard with
 background world preparation and downloads, and a design pass (fonts, toasts,
-favicon). Covered by 23 unit tests plus verified end-to-end API flows. The only
+favicon). Covered by 21 unit tests plus verified end-to-end API flows. The only
 deliberately out-of-scope item is real Backblaze B2 verification (the S3 client
 is wired but untested against a live bucket; local-disk storage is used in dev).
