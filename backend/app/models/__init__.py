@@ -1,0 +1,43 @@
+"""SQLAlchemy models. Import everything here so Alembic/metadata sees them."""
+from app.models.blockdata import BlockDefinition
+from app.models.enums import (
+    BlueprintStatus,
+    GridSize,
+    PreparedWorldStatus,
+    RequirementType,
+    Role,
+)
+from app.models.job import Job
+from app.models.ship import Blueprint, BlueprintSlot, Requirement, ShipClass
+from app.models.setting import AppSetting
+from app.models.user import Session as UserSession
+from app.models.user import User
+from app.models.world import (
+    GameMap,
+    PreparedWorld,
+    PreparedWorldAssignment,
+    StartSlot,
+    StartSlotClass,
+)
+
+__all__ = [
+    "BlockDefinition",
+    "BlueprintStatus",
+    "GridSize",
+    "PreparedWorldStatus",
+    "RequirementType",
+    "Role",
+    "Job",
+    "Blueprint",
+    "BlueprintSlot",
+    "Requirement",
+    "ShipClass",
+    "AppSetting",
+    "UserSession",
+    "User",
+    "GameMap",
+    "PreparedWorld",
+    "PreparedWorldAssignment",
+    "StartSlot",
+    "StartSlotClass",
+]

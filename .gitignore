@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.env
+
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Storage / temp
+/tmp/formula-se-storage/
+backend/data/block_definitions.local.json
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

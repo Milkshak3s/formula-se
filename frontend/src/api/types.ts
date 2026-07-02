@@ -1,0 +1,119 @@
+export type Role = "member" | "engineer" | "commander" | "admin";
+
+export const ROLE_LEVEL: Record<Role, number> = {
+  member: 0,
+  engineer: 1,
+  commander: 2,
+  admin: 3,
+};
+
+export interface User {
+  id: string;
+  email: string;
+  display_name: string;
+  role: Role;
+  created_at: string;
+}
+
+export type RequirementType =
+  | "block_count"
+  | "grid_size"
+  | "pcu_limit"
+  | "weapon_count"
+  | "block_whitelist"
+  | "block_blacklist";
+
+export interface Requirement {
+  id?: string;
+  rule_type: RequirementType;
+  params: Record<string, any>;
+}
+
+export interface ShipClass {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  requirements: Requirement[];
+}
+
+export interface Blueprint {
+  id: string;
+  slot_id: string;
+  uploader_id: string | null;
+  name: string;
+  stats: Record<string, any>;
+  status: string;
+  created_at: string;
+}
+
+export interface Slot {
+  id: string;
+  ship_class_id: string;
+  name: string;
+  created_at: string;
+  ship_class_name: string | null;
+  active_blueprint: Blueprint | null;
+}
+
+export interface StartSlot {
+  id: string;
+  map_id: string;
+  name: string;
+  position_index: number;
+  gps_x: number;
+  gps_y: number;
+  gps_z: number;
+  ship_class_ids: string[];
+}
+
+export interface GameMap {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  start_slots: StartSlot[];
+}
+
+export type PreparedWorldStatus =
+  | "queued"
+  | "processing"
+  | "ready"
+  | "failed"
+  | "expired";
+
+export interface PreparedWorld {
+  id: string;
+  map_id: string;
+  name: string;
+  status: PreparedWorldStatus;
+  error: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface RuleResult {
+  rule: string;
+  param: Record<string, any>;
+  measured: any;
+  allowed: any;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ValidationReport {
+  passed: boolean;
+  results: RuleResult[];
+  stats: Record<string, any>;
+}
+
+export interface BlockDataStats {
+  count: number;
+  updated_at: string | null;
+  sources: Record<string, number>;
+}
+
+export interface AppSettings {
+  invite_code: string;
+  server_push_enabled: boolean;
+}

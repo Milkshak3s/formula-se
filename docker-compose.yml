@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: formulase
+      POSTGRES_PASSWORD: formulase
+      POSTGRES_DB: formulase
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U formulase"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://formulase:formulase@postgres:5432/formulase
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@formula.se}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-changeme123}
+      DEFAULT_INVITE_CODE: ${DEFAULT_INVITE_CODE:-FORMULA-SE}
+      B2_ENDPOINT_URL: ${B2_ENDPOINT_URL:-}
+      B2_KEY_ID: ${B2_KEY_ID:-}
+      B2_APPLICATION_KEY: ${B2_APPLICATION_KEY:-}
+      B2_BUCKET: ${B2_BUCKET:-formula-se}
+      LOCAL_STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  worker:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://formulase:formulase@postgres:5432/formulase
+      B2_ENDPOINT_URL: ${B2_ENDPOINT_URL:-}
+      B2_KEY_ID: ${B2_KEY_ID:-}
+      B2_APPLICATION_KEY: ${B2_APPLICATION_KEY:-}
+      B2_BUCKET: ${B2_BUCKET:-formula-se}
+      LOCAL_STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: python -m app.worker
+
+  caddy:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  storage:

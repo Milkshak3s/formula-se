@@ -1,0 +1,15 @@
+:80 {
+	encode gzip
+
+	# Proxy API calls to the FastAPI service.
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Serve the built SPA, falling back to index.html for client routing.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
