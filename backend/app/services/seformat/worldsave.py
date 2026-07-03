@@ -113,11 +113,33 @@ def _translate_grid(grid_el: etree._Element, dx: float, dy: float, dz: float) ->
         break  # only the grid's own position, not nested block orientations
 
 
-def _reassign_entity_ids(grid_el: etree._Element, alloc: EntityIdAllocator) -> None:
-    """Give the grid and every nested entity a fresh EntityId."""
-    for el in grid_el.iter():
-        if _localname(el.tag) == "EntityId":
-            el.text = str(alloc.allocate())
+def _remap_entity_ids(
+    grids: list[etree._Element], alloc: EntityIdAllocator
+) -> None:
+    """Reassign every EntityId across a placement's grids and rewrite all
+    in-ship references so the ship stays assembled.
+
+    Multi-grid ships (rotors/pistons/hinges/wheels) link subgrids by EntityId
+    via reference fields like ``TopBlockId``/``ParentEntityId``/``BlockEntityId``.
+    We build one old→new map from every ``<EntityId>`` definition, then rewrite
+    the text of *any* element whose value matches a reassigned id. EntityIds are
+    64-bit values, so this never collides with small counters (e.g. inventory
+    ``nextItemId``) or float coordinates. Reassigning also guarantees the
+    injected entities never clash with EntityIds already in the world.
+    """
+    id_map: dict[str, str] = {}
+    for grid in grids:
+        for el in grid.iter():
+            if _localname(el.tag) == "EntityId" and el.text:
+                old = el.text.strip()
+                if old and old != "0" and old not in id_map:
+                    id_map[old] = str(alloc.allocate())
+    if not id_map:
+        return
+    for grid in grids:
+        for el in grid.iter():
+            if el.text is not None and el.text.strip() in id_map:
+                el.text = id_map[el.text.strip()]
 
 
 def _blueprint_grid_elements(grids_xml: bytes) -> list[etree._Element]:
@@ -135,9 +157,17 @@ def _blueprint_grid_elements(grids_xml: bytes) -> list[etree._Element]:
 
 
 def _to_sector_entity(grid_el: etree._Element) -> etree._Element:
-    """Clone a blueprint <CubeGrid> as a sector <MyObjectBuilder_CubeGrid>."""
+    """Clone a blueprint <CubeGrid> as a sector entity.
+
+    SE serializes every ``<SectorObjects>`` item as
+    ``<MyObjectBuilder_EntityBase xsi:type="MyObjectBuilder_CubeGrid">`` — the
+    element name is always the *base* type and the concrete type is carried in
+    the ``xsi:type`` attribute. Emitting ``<MyObjectBuilder_CubeGrid>`` directly
+    makes SE's list deserializer skip the entity, so the grid is present in the
+    file but never loaded into the world.
+    """
     nsmap = {"xsi": XSI}
-    new_el = etree.Element("MyObjectBuilder_CubeGrid", nsmap=nsmap)
+    new_el = etree.Element("MyObjectBuilder_EntityBase", nsmap=nsmap)
     new_el.set(f"{{{XSI}}}type", "MyObjectBuilder_CubeGrid")
     for child in grid_el:
         new_el.append(_deepcopy(child))
@@ -179,7 +209,10 @@ def inject_into_sector(
         dz = placement.z - anchor[2]
         for grid in grids:
             _translate_grid(grid, dx, dy, dz)
-            _reassign_entity_ids(grid, alloc)
+        # Reassign EntityIds across the whole ship at once so cross-grid
+        # references (subgrid links) are rewritten consistently.
+        _remap_entity_ids(grids, alloc)
+        for grid in grids:
             sector_objects.append(_to_sector_entity(grid))
 
     return etree.tostring(root, xml_declaration=True, encoding="utf-8")

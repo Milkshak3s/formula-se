@@ -1,7 +1,9 @@
 import io
 import zipfile
 
-from app.services.seformat.blueprint import extract_grids_xml
+from lxml import etree
+
+from app.services.seformat.blueprint import _localname, extract_grids_xml
 from app.services.seformat.worldsave import (
     GridPlacement,
     inject_into_sector,
@@ -26,8 +28,22 @@ def test_inject_adds_grid_and_repositions():
     placement = GridPlacement(grids_xml=grids, x=1000.0, y=2000.0, z=3000.0)
     result = inject_into_sector(sbs, [placement])
     text = result.decode()
-    assert "MyObjectBuilder_CubeGrid" in text
     assert 'x="1000.0"' in text and 'y="2000.0"' in text and 'z="3000.0"' in text
+
+    # The grid must be serialized as an EntityBase list item with an xsi:type
+    # discriminator — SE skips the entity if the element name is the concrete
+    # type instead of MyObjectBuilder_EntityBase.
+    root = etree.fromstring(result)
+    XSI = "{http://www.w3.org/2001/XMLSchema-instance}type"
+    entities = [
+        e
+        for e in root.iter()
+        if _localname(e.tag) == "MyObjectBuilder_EntityBase"
+        and e.get(XSI) == "MyObjectBuilder_CubeGrid"
+    ]
+    assert len(entities) == 1
+    # And never emitted as a bare concrete-type element.
+    assert not any(_localname(e.tag) == "MyObjectBuilder_CubeGrid" for e in root.iter())
 
 
 def test_prepare_world_renames_and_injects():
@@ -61,6 +77,59 @@ def test_entity_ids_reassigned():
     ).decode()
     # Original blueprint EntityId 42 should have been replaced.
     assert "<EntityId>42</EntityId>" not in result
+
+
+def test_multigrid_subgrid_references_remapped():
+    """A subgrid link (base.TopBlockId -> top part EntityId on another grid)
+    must survive EntityId reassignment, or the ship spawns disassembled."""
+    grids_xml = b"""<CubeGrids>
+      <CubeGrid>
+        <EntityId>100</EntityId>
+        <GridSizeEnum>Large</GridSizeEnum>
+        <PositionAndOrientation><Position x="0" y="0" z="0"/></PositionAndOrientation>
+        <CubeBlocks>
+          <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_MotorStator"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <SubtypeName>LargeStator</SubtypeName>
+            <EntityId>200</EntityId>
+            <TopBlockId>300</TopBlockId>
+          </MyObjectBuilder_CubeBlock>
+        </CubeBlocks>
+      </CubeGrid>
+      <CubeGrid>
+        <EntityId>101</EntityId>
+        <GridSizeEnum>Large</GridSizeEnum>
+        <PositionAndOrientation><Position x="2.5" y="0" z="0"/></PositionAndOrientation>
+        <CubeBlocks>
+          <MyObjectBuilder_CubeBlock xsi:type="MyObjectBuilder_MotorRotor"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <SubtypeName>LargeRotor</SubtypeName>
+            <EntityId>300</EntityId>
+          </MyObjectBuilder_CubeBlock>
+        </CubeBlocks>
+      </CubeGrid>
+    </CubeGrids>"""
+
+    with zipfile.ZipFile(io.BytesIO(make_world_zip())) as zf:
+        sbs = zf.read("MyWorld/SANDBOX_0_0_0_.sbs")
+
+    out = inject_into_sector(sbs, [GridPlacement(grids_xml=grids_xml, x=1000, y=0, z=0)])
+    root = etree.fromstring(out)
+
+    def texts(tag):
+        return [e.text.strip() for e in root.iter() if _localname(e.tag) == tag and e.text]
+
+    entity_ids = set(texts("EntityId"))
+    top_block_ids = texts("TopBlockId")
+
+    # Old ids are gone; the base still points at the (now-renamed) rotor top,
+    # and that target exists among the injected EntityIds.
+    assert "300" not in entity_ids and "300" not in top_block_ids
+    assert len(top_block_ids) == 1
+    assert top_block_ids[0] in entity_ids
+    # Relative offset between the two grids is preserved (2.5m apart).
+    xs = sorted(float(p.get("x")) for p in root.iter() if _localname(p.tag) == "Position")
+    assert round(xs[1] - xs[0], 3) == 2.5
 
 
 def _world_with_backup() -> bytes:
