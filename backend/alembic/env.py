@@ -41,9 +41,14 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        # Serialize concurrent migrators. The lock is released automatically when
-        # the connection closes, so it can't leak on crash.
+        # Serialize concurrent migrators with a session-level advisory lock.
+        # Commit immediately after acquiring so this statement's transaction
+        # doesn't stay open and swallow Alembic's own migration transaction
+        # (which would roll the migrations back on connection close). A
+        # session-level lock survives the commit and is released explicitly
+        # below (and by the session ending, so it can't leak on crash).
         connection.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _MIGRATION_LOCK_KEY})
+        connection.commit()
         try:
             context.configure(connection=connection, target_metadata=target_metadata)
             with context.begin_transaction():
@@ -52,6 +57,7 @@ def run_migrations_online() -> None:
             connection.execute(
                 text("SELECT pg_advisory_unlock(:k)"), {"k": _MIGRATION_LOCK_KEY}
             )
+            connection.commit()
 
 
 if context.is_offline_mode():

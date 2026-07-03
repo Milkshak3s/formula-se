@@ -22,4 +22,4 @@ backend/data/block_definitions.local.json
 .vscode/
 
 # Kubernetes real secret (never commit)
-k8s/secret.yaml
+k8s/base/secret.yaml

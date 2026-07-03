@@ -5,18 +5,29 @@ worker, web/SPA, and an optional in-cluster Postgres.
 
 ## Layout
 
-| File | What |
-|---|---|
-| `namespace.yaml` | Namespace with `restricted` Pod Security enforcement |
-| `configmap.yaml` | Non-secret config (env, B2 bucket/region, feature flags) |
-| `secret.example.yaml` | Template for secrets — copy to `secret.yaml` (gitignored) |
-| `postgres-cluster.yaml` | CloudNativePG `Cluster` (HA Postgres via the CNCF operator) |
-| `api.yaml` | API Deployment + Service + HPA + PDB (migrations run as an init container) |
-| `worker.yaml` | Worker Deployment (heartbeat-based liveness) |
-| `web.yaml` | Caddy/SPA Deployment + Service + PDB |
-| `ingress.yaml` | Ingress (TLS via cert-manager, large upload body size) |
-| `networkpolicy.yaml` | Default-deny ingress + least-privilege allows |
-| `kustomization.yaml` | Ties it together; pins image tags centrally |
+Standard Kustomize `base` + `overlays` structure:
+
+```
+k8s/
+├── base/                     # portable manifests (placeholder image/host)
+│   ├── namespace.yaml        # Namespace with `restricted` Pod Security
+│   ├── configmap.yaml        # non-secret config (env, B2 bucket/region, flags)
+│   ├── secret.example.yaml   # template → copy to base/secret.yaml (gitignored)
+│   ├── postgres-cluster.yaml # CloudNativePG `Cluster` (HA Postgres, CNCF operator)
+│   ├── api.yaml              # API Deployment + Service + HPA + PDB (init-container migrations)
+│   ├── worker.yaml           # Worker Deployment (heartbeat liveness)
+│   ├── web.yaml              # Caddy/SPA Deployment + Service + PDB
+│   ├── ingress.yaml          # Ingress (TLS via cert-manager, large upload body)
+│   ├── networkpolicy.yaml    # default-deny ingress on app tiers + allows
+│   └── kustomization.yaml
+└── overlays/
+    └── prod/                 # cluster-specific: real images, host, storage class
+        └── kustomization.yaml
+```
+
+The **`prod` overlay** is the concrete deployment: it points the images at the
+real registry, patches the ingress host to `fse.mlk.sh` + its TLS secret, and
+sets the CloudNativePG storage class. Add sibling overlays for other clusters.
 
 ## Production readiness built in
 
@@ -63,33 +74,34 @@ docker push ghcr.io/milkshak3s/formula-se-backend:0.1.0
 docker push ghcr.io/milkshak3s/formula-se-web:0.1.0
 ```
 
-Update the tags in `kustomization.yaml` (`images:`) to match.
+Point the overlay's `images:` at your registry/tags (`overlays/prod/kustomization.yaml`).
 
 ## 2. Configure
 
 ```bash
-cp k8s/secret.example.yaml k8s/secret.yaml
-# edit k8s/secret.yaml — B2 keys, bootstrap admin, invite code
+cp k8s/base/secret.example.yaml k8s/base/secret.yaml
+# edit k8s/base/secret.yaml — B2 keys, bootstrap admin, invite code
 #   (no DB password: CloudNativePG generates the formula-se-db-app secret)
-# edit k8s/configmap.yaml — B2 endpoint/region/bucket
-# edit k8s/postgres-cluster.yaml — instances, storage size/class
-# edit k8s/ingress.yaml — your host + TLS issuer
+# edit k8s/base/configmap.yaml — B2 endpoint/region/bucket
+# edit k8s/base/postgres-cluster.yaml — instances, storage size
+# edit k8s/overlays/prod/kustomization.yaml — images, ingress host, storageClass
 ```
 
 Using a **managed/external database** instead of CloudNativePG? Remove
-`postgres-cluster.yaml` from `kustomization.yaml` and give the app a
+`postgres-cluster.yaml` from `base/kustomization.yaml` and give the app a
 `DATABASE_URL` — e.g. add it to `secret.yaml` and reference it via `envFrom`, or
-change the `DATABASE_URL` `secretKeyRef` in `api.yaml`/`worker.yaml` to point at
-your own secret. A bare `postgresql://…` URL is fine; the app rewrites it to the
-psycopg3 driver automatically.
+change the `DATABASE_URL` `secretKeyRef` in `base/api.yaml`/`base/worker.yaml` to
+point at your own secret. A bare `postgresql://…` URL is fine; the app rewrites
+it to the psycopg3 driver automatically.
 
 Not using B2 yet? The app falls back to local disk, but that's per-pod and
-ephemeral in Kubernetes — configure B2 for any real deployment.
+ephemeral in Kubernetes (the API and worker pods wouldn't share files) —
+configure B2 for any real deployment.
 
 ## 3. Deploy
 
 ```bash
-kubectl apply -k k8s/
+kubectl apply -k k8s/overlays/prod
 
 # watch it come up
 kubectl -n formula-se get pods -w
@@ -106,17 +118,18 @@ start from the Secret.
 kubectl -n formula-se get cluster            # CloudNativePG cluster health
 kubectl -n formula-se get deploy,hpa,ingress
 kubectl -n formula-se logs deploy/formula-se-api
-curl -sk https://formula-se.example.com/api/health
+curl -s https://fse.mlk.sh/api/health
 ```
 
 ## Upgrades
 
-Build a new image tag, bump it in `kustomization.yaml`, and `kubectl apply -k`
-again. New pods run migrations via their init container before the rollout
-proceeds; the advisory lock keeps concurrent rollouts safe.
+Build a new image tag, bump it in `overlays/prod/kustomization.yaml`, and
+`kubectl apply -k k8s/overlays/prod` again. New pods run migrations via their
+init container before the rollout proceeds; the advisory lock keeps concurrent
+rollouts safe.
 
 ## Validate locally
 
 ```bash
-kubectl kustomize k8s/ | kubectl apply --dry-run=client -f -
+kubectl kustomize k8s/overlays/prod | kubectl apply --dry-run=client -f -
 ```
