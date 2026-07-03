@@ -61,3 +61,35 @@ def test_entity_ids_reassigned():
     ).decode()
     # Original blueprint EntityId 42 should have been replaced.
     assert "<EntityId>42</EntityId>" not in result
+
+
+def _world_with_backup() -> bytes:
+    """A world zip that also carries SE's local Backup/ folder of stale saves."""
+    base = make_world_zip("Original Session")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(base)) as src, zipfile.ZipFile(
+        buf, "w", zipfile.ZIP_DEFLATED
+    ) as dst:
+        for name in src.namelist():
+            dst.writestr(name, src.read(name))
+        # Add stale backup copies under Backup/ (deeper path than the main one).
+        dst.writestr("MyWorld/Backup/2026-01-01 000000/SANDBOX_0_0_0_.sbs", b"<old/>")
+        dst.writestr("MyWorld/Backup/2026-01-01 000000/Sandbox.sbc", b"<old/>")
+    return buf.getvalue()
+
+
+def test_prepare_world_drops_backup_folder():
+    grids = extract_grids_xml(make_blueprint_xml(position=(0, 0, 0)))
+    out = prepare_world(
+        _world_with_backup(),
+        session_name="Cleaned Match",
+        placements=[GridPlacement(grids_xml=grids, x=10.0, y=0.0, z=0.0)],
+    )
+    with zipfile.ZipFile(io.BytesIO(out)) as zf:
+        names = zf.namelist()
+        # No Backup/ members survive.
+        assert not any("/Backup/" in n or n.startswith("Backup/") for n in names)
+        # Exactly one .sbs remains and it received the injected grid.
+        sbs = [n for n in names if n.lower().endswith(".sbs")]
+        assert len(sbs) == 1
+        assert "MyObjectBuilder_CubeGrid" in zf.read(sbs[0]).decode()

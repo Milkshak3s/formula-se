@@ -217,14 +217,18 @@ def prepare_world(
         for name in src.namelist():
             if name.endswith("/"):
                 continue
+            rel = name[len(common_prefix):] if common_prefix else name
+            # Drop SE's local Backup/ folder — stale sector copies from the
+            # source save that only bloat the prepared world. SE regenerates
+            # its own backups; only the main SANDBOX_*.sbs is ever loaded.
+            if rel.split("/", 1)[0].lower() == "backup":
+                continue
             data = src.read(name)
             lname = name.lower()
             if lname.endswith("sandbox.sbc") or lname.endswith("sandbox_config.sbc"):
                 data = _set_session_name(data, session_name)
             elif name == sbs_name:
                 data = inject_into_sector(data, placements, alloc)
-
-            rel = name[len(common_prefix):] if common_prefix else name
             dst.writestr(f"{folder}/{rel}", data)
 
     return out_buf.getvalue()
