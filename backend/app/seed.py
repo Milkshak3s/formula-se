@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -46,7 +47,12 @@ def seed_bootstrap_admin(db: Session) -> User | None:
         role=Role.admin,
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Another replica created the admin first (unique email). Not an error.
+        db.rollback()
+        return db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     db.refresh(user)
     return user
 

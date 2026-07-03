@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: formula-se
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml          # created from secret.example.yaml (gitignored)
+  - postgres.yaml        # remove this line if using a managed database
+  - api.yaml
+  - worker.yaml
+  - web.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+
+# Pin image tags centrally. Point these at your registry and a real version.
+images:
+  - name: ghcr.io/milkshak3s/formula-se-backend
+    newTag: "0.1.0"
+  - name: ghcr.io/milkshak3s/formula-se-web
+    newTag: "0.1.0"
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: formula-se
+    includeSelectors: false

@@ -7,6 +7,7 @@ Run with: ``python -m app.worker``
 from __future__ import annotations
 
 import logging
+import os
 import time
 from datetime import datetime, timezone
 
@@ -27,6 +28,17 @@ log = logging.getLogger("worker")
 
 POLL_INTERVAL_SECONDS = 2
 JANITOR_INTERVAL_SECONDS = 300
+
+# Touched every loop iteration so a liveness probe can detect a wedged worker.
+HEARTBEAT_FILE = os.environ.get("WORKER_HEARTBEAT_FILE", "/tmp/worker-heartbeat")
+
+
+def _heartbeat() -> None:
+    try:
+        with open(HEARTBEAT_FILE, "w") as f:
+            f.write(str(time.time()))
+    except OSError:
+        pass
 
 _HANDLERS = {
     JOB_PREPARE_WORLD: lambda db, payload: process_prepared_world(
@@ -102,8 +114,10 @@ def main() -> None:
         db.close()
 
     log.info("Worker started")
+    _heartbeat()
     last_janitor = 0.0
     while True:
+        _heartbeat()
         did_work = run_once()
         now = time.monotonic()
         if now - last_janitor > JANITOR_INTERVAL_SECONDS:

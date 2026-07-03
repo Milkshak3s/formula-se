@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: formula-se-worker
+  labels:
+    app.kubernetes.io/part-of: formula-se
+    app.kubernetes.io/component: worker
+spec:
+  # SELECT ... FOR UPDATE SKIP LOCKED makes multiple workers safe; scale as needed.
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: formula-se
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: formula-se
+        app.kubernetes.io/component: worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: migrate
+          image: ghcr.io/milkshak3s/formula-se-backend:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: formula-se-config
+            - secretRef:
+                name: formula-se-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      containers:
+        - name: worker
+          image: ghcr.io/milkshak3s/formula-se-backend:latest
+          command: ["python", "-m", "app.worker"]
+          envFrom:
+            - configMapRef:
+                name: formula-se-config
+            - secretRef:
+                name: formula-se-secrets
+          # The worker writes a heartbeat file each loop; the probes read its age.
+          startupProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import os,sys; sys.exit(0 if os.path.exists(os.environ.get('WORKER_HEARTBEAT_FILE','/tmp/worker-heartbeat')) else 1)"
+            periodSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import os,sys,time; f=os.environ.get('WORKER_HEARTBEAT_FILE','/tmp/worker-heartbeat'); sys.exit(0 if time.time()-os.path.getmtime(f) < 120 else 1)"
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            # World-prep parses save files in memory; raise for very large worlds.
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

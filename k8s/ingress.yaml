@@ -1,0 +1,32 @@
+# Routes the public host to the web tier, which serves the SPA and proxies
+# /api/* to the API service. Adjust host, ingressClassName, and TLS issuer to
+# your cluster. Assumes ingress-nginx + cert-manager; change annotations to suit.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: formula-se
+  labels:
+    app.kubernetes.io/part-of: formula-se
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # World-save uploads can be large; raise body size and upload timeouts.
+    nginx.ingress.kubernetes.io/proxy-body-size: "512m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - formula-se.example.com
+      secretName: formula-se-tls
+  rules:
+    - host: formula-se.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: formula-se-web
+                port:
+                  number: 80

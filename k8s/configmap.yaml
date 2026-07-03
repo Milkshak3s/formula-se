@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: formula-se-config
+  labels:
+    app.kubernetes.io/part-of: formula-se
+data:
+  # --- App ---
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  # Schema is owned by the migrate init container (alembic); never auto-create.
+  AUTO_CREATE_TABLES: "false"
+  # Cookies are first-party behind TLS.
+  COOKIE_SECURE: "true"
+  COOKIE_SAMESITE: "lax"
+  PREPARED_WORLD_TTL_HOURS: "24"
+  SERVER_PUSH_ENABLED: "false"
+  BOOTSTRAP_ADMIN_NAME: "Admin"
+  LOCAL_STORAGE_DIR: "/tmp/storage"
+  WORKER_HEARTBEAT_FILE: "/tmp/worker-heartbeat"
+
+  # --- Backblaze B2 (bucket/region/endpoint are not secret; keys are) ---
+  B2_ENDPOINT_URL: "https://s3.us-east-005.backblazeb2.com"
+  B2_REGION: "us-east-005"
+  B2_BUCKET: "formula-se"
+
+  # --- Postgres (matches the URL in the Secret) ---
+  POSTGRES_USER: "formulase"
+  POSTGRES_DB: "formulase"

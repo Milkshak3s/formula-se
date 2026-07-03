@@ -1,9 +1,12 @@
-:80 {
+# Listens on an unprivileged port so the container can run as non-root.
+# The API upstream is configurable so the same image works under Docker Compose
+# (default "api:8000") and Kubernetes (set API_UPSTREAM=formula-se-api:8000).
+:8080 {
 	encode gzip
 
 	# Proxy API calls to the FastAPI service.
 	handle /api/* {
-		reverse_proxy api:8000
+		reverse_proxy {$API_UPSTREAM:api:8000}
 	}
 
 	# Serve the built SPA, falling back to index.html for client routing.

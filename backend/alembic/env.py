@@ -3,11 +3,16 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from app.core.config import settings
 from app.core.database import Base
 import app.models  # noqa: F401 — ensure all models are imported for autogenerate
+
+# A constant session-level advisory lock key so that if several pods run
+# `alembic upgrade head` concurrently (e.g. multiple replicas' init containers),
+# only one migrates at a time and the rest no-op once it's at head.
+_MIGRATION_LOCK_KEY = 728_411_053
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
@@ -36,9 +41,17 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
-        with context.begin_transaction():
-            context.run_migrations()
+        # Serialize concurrent migrators. The lock is released automatically when
+        # the connection closes, so it can't leak on crash.
+        connection.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _MIGRATION_LOCK_KEY})
+        try:
+            context.configure(connection=connection, target_metadata=target_metadata)
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:k)"), {"k": _MIGRATION_LOCK_KEY}
+            )
 
 
 if context.is_offline_mode():
