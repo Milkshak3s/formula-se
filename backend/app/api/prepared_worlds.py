@@ -108,6 +108,10 @@ def create_prepared(
             PreparedWorldAssignment(
                 prepared_world_id=pw.id,
                 start_slot_id=start_slot.id,
+                start_slot_name=start_slot.name,
+                gps_x=start_slot.gps_x,
+                gps_y=start_slot.gps_y,
+                gps_z=start_slot.gps_z,
                 blueprint_id=active_bp.id,
             )
         )

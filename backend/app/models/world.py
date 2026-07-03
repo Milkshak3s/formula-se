@@ -126,11 +126,18 @@ class PreparedWorldAssignment(Base):
         nullable=False,
         index=True,
     )
-    start_slot_id: Mapped[uuid.UUID] = mapped_column(
+    # SET NULL (not RESTRICT) so a map's start slots stay editable after a world
+    # has used them; the snapshot columns below preserve the history.
+    start_slot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("start_slots.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("start_slots.id", ondelete="SET NULL"),
+        nullable=True,
     )
+    # Snapshot of the start slot at assignment time (survives slot edits/deletes).
+    start_slot_name: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    gps_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_z: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Pins the exact blueprint version, surviving later slot overwrites.
     blueprint_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

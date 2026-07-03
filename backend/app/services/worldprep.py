@@ -42,21 +42,25 @@ def process_prepared_world(db: Session, prepared_world_id: str) -> None:
 
         placements: list[GridPlacement] = []
         for assignment in pw.assignments:
-            start_slot = db.get(StartSlot, assignment.start_slot_id)
             blueprint = db.get(Blueprint, assignment.blueprint_id)
-            if start_slot is None or blueprint is None:
+            if blueprint is None:
                 continue
+            # Prefer the coordinate snapshot captured at assignment time; fall
+            # back to the live start slot if the snapshot is absent (older rows).
+            x, y, z = assignment.gps_x, assignment.gps_y, assignment.gps_z
+            if x is None or y is None or z is None:
+                start_slot = (
+                    db.get(StartSlot, assignment.start_slot_id)
+                    if assignment.start_slot_id
+                    else None
+                )
+                if start_slot is None:
+                    continue
+                x, y, z = start_slot.gps_x, start_slot.gps_y, start_slot.gps_z
             bp_raw = storage.get(blueprint.b2_key)
             bp_sbc = extract_bp_sbc(bp_raw)
             grids_xml = extract_grids_xml(bp_sbc)
-            placements.append(
-                GridPlacement(
-                    grids_xml=grids_xml,
-                    x=start_slot.gps_x,
-                    y=start_slot.gps_y,
-                    z=start_slot.gps_z,
-                )
-            )
+            placements.append(GridPlacement(grids_xml=grids_xml, x=x, y=y, z=z))
 
         result_zip = prepare_world(
             world_zip=world_zip,
