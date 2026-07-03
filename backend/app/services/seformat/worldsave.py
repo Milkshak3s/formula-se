@@ -251,13 +251,20 @@ def prepare_world(
             if name.endswith("/"):
                 continue
             rel = name[len(common_prefix):] if common_prefix else name
+            lname = name.lower()
             # Drop SE's local Backup/ folder — stale sector copies from the
             # source save that only bloat the prepared world. SE regenerates
             # its own backups; only the main SANDBOX_*.sbs is ever loaded.
             if rel.split("/", 1)[0].lower() == "backup":
                 continue
+            # Drop the binary sector/checkpoint mirrors (*.sbsB5 / *.sbcB5). SE
+            # loads these binary blobs in preference to the XML when present, so
+            # keeping the *stale* binary would shadow our injected .sbs and the
+            # spawned grids would silently not appear in game. SE regenerates
+            # them from the XML on load/save.
+            if lname.endswith("b5"):
+                continue
             data = src.read(name)
-            lname = name.lower()
             if lname.endswith("sandbox.sbc") or lname.endswith("sandbox_config.sbc"):
                 data = _set_session_name(data, session_name)
             elif name == sbs_name:

@@ -162,3 +162,34 @@ def test_prepare_world_drops_backup_folder():
         sbs = [n for n in names if n.lower().endswith(".sbs")]
         assert len(sbs) == 1
         assert "MyObjectBuilder_CubeGrid" in zf.read(sbs[0]).decode()
+
+
+def _world_with_binary_mirror() -> bytes:
+    """A world zip carrying the binary sector/checkpoint mirrors SE writes
+    alongside the XML (SANDBOX_*.sbsB5). SE loads these in preference to the XML,
+    so a prepared world must not keep the stale binary."""
+    base = make_world_zip("Original Session")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(base)) as src, zipfile.ZipFile(
+        buf, "w", zipfile.ZIP_DEFLATED
+    ) as dst:
+        for name in src.namelist():
+            dst.writestr(name, src.read(name))
+        dst.writestr("MyWorld/SANDBOX_0_0_0_.sbsB5", b"STALE-BINARY-SECTOR")
+    return buf.getvalue()
+
+
+def test_prepare_world_drops_binary_mirror():
+    grids = extract_grids_xml(make_blueprint_xml(position=(0, 0, 0)))
+    out = prepare_world(
+        _world_with_binary_mirror(),
+        session_name="No Stale Binary",
+        placements=[GridPlacement(grids_xml=grids, x=5.0, y=0.0, z=0.0)],
+    )
+    with zipfile.ZipFile(io.BytesIO(out)) as zf:
+        names = zf.namelist()
+        # The stale binary must be gone so SE loads our injected XML sector.
+        assert not any(n.lower().endswith("b5") for n in names), names
+        sbs = [n for n in names if n.lower().endswith(".sbs")]
+        assert len(sbs) == 1
+        assert "MyObjectBuilder_CubeGrid" in zf.read(sbs[0]).decode()
