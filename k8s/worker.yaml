@@ -40,6 +40,12 @@ spec:
                 name: formula-se-config
             - secretRef:
                 name: formula-se-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: formula-se-db-app
+                  key: uri
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -64,6 +70,12 @@ spec:
                 name: formula-se-config
             - secretRef:
                 name: formula-se-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: formula-se-db-app
+                  key: uri
           # The worker writes a heartbeat file each loop; the probes read its age.
           startupProbe:
             exec:

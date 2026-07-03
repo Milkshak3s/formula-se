@@ -1,0 +1,61 @@
+# PostgreSQL managed by the CloudNativePG operator (CNCF), which must already be
+# installed in the cluster. The operator handles HA, failover, rolling minor
+# upgrades, and credential generation.
+#
+# It creates, among others:
+#   - Services:  formula-se-db-rw (primary), formula-se-db-ro (replicas),
+#                formula-se-db-r (any)
+#   - Secret:    formula-se-db-app  (owner credentials + ready-to-use `uri`)
+#
+# The app consumes DATABASE_URL from that generated secret's `uri` key (see
+# api.yaml / worker.yaml), so no DB password lives in our own Secret.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: formula-se-db
+  labels:
+    app.kubernetes.io/part-of: formula-se
+    app.kubernetes.io/component: database
+spec:
+  # 1 primary + 2 replicas. Set to 1 for a non-HA/dev cluster.
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  primaryUpdateStrategy: unsupervised
+
+  # Creates database `formulase` owned by role `formulase`; the operator
+  # generates the password and publishes it in the `formula-se-db-app` secret.
+  bootstrap:
+    initdb:
+      database: formulase
+      owner: formulase
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+
+  storage:
+    size: 10Gi
+    # storageClass: fast-ssd   # set to your cluster's class; omit for default
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  # Continuous backup to object storage (e.g. the same Backblaze B2 bucket).
+  # Uncomment and point at a bucket to enable WAL archiving + base backups.
+  # backup:
+  #   barmanObjectStore:
+  #     destinationPath: s3://formula-se/pg-backups
+  #     endpointURL: https://s3.us-east-005.backblazeb2.com
+  #     s3Credentials:
+  #       accessKeyId:
+  #         name: formula-se-secrets
+  #         key: B2_KEY_ID
+  #       secretAccessKey:
+  #         name: formula-se-secrets
+  #         key: B2_APPLICATION_KEY
+  #   retentionPolicy: "14d"

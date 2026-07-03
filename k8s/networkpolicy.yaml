@@ -1,7 +1,11 @@
-# Ingress lockdown: deny all pod ingress by default, then allow only the needed
-# paths. Egress is left open so pods can reach DNS, Postgres, and Backblaze B2.
-# NOTE: kubelet health-probe traffic is generally exempt, but on some CNIs you
-# may need to allow the node/host source explicitly.
+# Ingress lockdown for the app tiers. Egress is left open so pods can reach DNS,
+# Postgres, and Backblaze B2.
+#
+# Scope note: the default-deny below selects only our own workloads
+# (app.kubernetes.io/name: formula-se), NOT the CloudNativePG-managed database
+# pods — the operator owns DB pod networking (replication, operator↔instance,
+# metrics), and constraining it here would break the cluster. The app reaches
+# the DB via (open) egress to the formula-se-db-rw service.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -9,7 +13,9 @@ metadata:
   labels:
     app.kubernetes.io/part-of: formula-se
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: formula-se
   policyTypes:
     - Ingress
 ---
@@ -57,30 +63,3 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-postgres-from-app
-  labels:
-    app.kubernetes.io/part-of: formula-se
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: formula-se
-      app.kubernetes.io/component: postgres
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: formula-se
-              app.kubernetes.io/component: api
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: formula-se
-              app.kubernetes.io/component: worker
-      ports:
-        - protocol: TCP
-          port: 5432

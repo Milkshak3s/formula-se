@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,21 @@ class Settings(BaseSettings):
     # In dev we create tables on startup for zero-setup convenience. In Docker/
     # prod this is false and schema is managed by `alembic upgrade head`.
     auto_create_tables: bool = Field(default=True)
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_driver(cls, v: str) -> str:
+        """Force the psycopg (v3) driver.
+
+        We ship psycopg3 only, but a bare ``postgresql://`` URL routes SQLAlchemy
+        to psycopg2. Operators (e.g. CloudNativePG) hand out ``postgresql://``
+        connection strings, so normalize any driverless scheme to
+        ``postgresql+psycopg://`` for zero-config integration.
+        """
+        for prefix in ("postgresql://", "postgres://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
 
     # --- Auth / sessions ---
     session_cookie_name: str = "formulase_session"

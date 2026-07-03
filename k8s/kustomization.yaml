@@ -6,8 +6,9 @@ namespace: formula-se
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml          # created from secret.example.yaml (gitignored)
-  - postgres.yaml        # remove this line if using a managed database
+  - secret.yaml            # created from secret.example.yaml (gitignored)
+  - postgres-cluster.yaml  # CloudNativePG Cluster (operator must be installed);
+                           # remove if pointing DATABASE_URL at an external DB
   - api.yaml
   - worker.yaml
   - web.yaml

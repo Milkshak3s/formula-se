@@ -24,6 +24,6 @@ data:
   B2_REGION: "us-east-005"
   B2_BUCKET: "formula-se"
 
-  # --- Postgres (matches the URL in the Secret) ---
-  POSTGRES_USER: "formulase"
-  POSTGRES_DB: "formulase"
+  # Database name/owner are configured on the CloudNativePG Cluster
+  # (postgres-cluster.yaml); DATABASE_URL comes from the operator-managed
+  # `formula-se-db-app` secret, not from here.

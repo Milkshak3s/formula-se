@@ -10,7 +10,7 @@ worker, web/SPA, and an optional in-cluster Postgres.
 | `namespace.yaml` | Namespace with `restricted` Pod Security enforcement |
 | `configmap.yaml` | Non-secret config (env, B2 bucket/region, feature flags) |
 | `secret.example.yaml` | Template for secrets — copy to `secret.yaml` (gitignored) |
-| `postgres.yaml` | Postgres StatefulSet + headless Service (optional) |
+| `postgres-cluster.yaml` | CloudNativePG `Cluster` (HA Postgres via the CNCF operator) |
 | `api.yaml` | API Deployment + Service + HPA + PDB (migrations run as an init container) |
 | `worker.yaml` | Worker Deployment (heartbeat-based liveness) |
 | `web.yaml` | Caddy/SPA Deployment + Service + PDB |
@@ -20,6 +20,10 @@ worker, web/SPA, and an optional in-cluster Postgres.
 
 ## Production readiness built in
 
+- **Database**: PostgreSQL is run by the **CloudNativePG** operator (CNCF) as a
+  3-instance HA `Cluster` with automated failover and rolling minor upgrades. The
+  operator generates the app credentials in a `formula-se-db-app` secret; the app
+  and migrations consume its ready-made `uri` (no DB password in our own secret).
 - **Migrations**: `alembic upgrade head` runs as an init container on API and
   worker. Concurrency-safe — the Alembic env takes a Postgres advisory lock, so
   many replicas serialize and no-op once at head. Pods never serve before the
@@ -37,10 +41,13 @@ worker, web/SPA, and an optional in-cluster Postgres.
   limit for very large world saves).
 - **Secrets**: kept out of git (`secret.yaml` is gitignored); use Sealed
   Secrets / External Secrets in real clusters.
-- **Network**: default-deny ingress; only web←ingress, api←web, postgres←app.
+- **Network**: default-deny ingress on the app tiers; only web←ingress and
+  api←web are allowed. DB pod networking is left to the CloudNativePG operator.
 
 ## Prerequisites
 
+- The **CloudNativePG operator** installed cluster-wide (provides the
+  `postgresql.cnpg.io` CRDs). See <https://cloudnative-pg.io>.
 - A cluster with an **ingress controller** (`ingress-nginx` assumed) and
   **cert-manager** (a `letsencrypt-prod` ClusterIssuer) for the Ingress.
 - **metrics-server** for the API HPA.
@@ -62,14 +69,19 @@ Update the tags in `kustomization.yaml` (`images:`) to match.
 
 ```bash
 cp k8s/secret.example.yaml k8s/secret.yaml
-# edit k8s/secret.yaml — DB password (must match POSTGRES_PASSWORD), B2 keys,
-# bootstrap admin, invite code
+# edit k8s/secret.yaml — B2 keys, bootstrap admin, invite code
+#   (no DB password: CloudNativePG generates the formula-se-db-app secret)
 # edit k8s/configmap.yaml — B2 endpoint/region/bucket
+# edit k8s/postgres-cluster.yaml — instances, storage size/class
 # edit k8s/ingress.yaml — your host + TLS issuer
 ```
 
-Using a **managed database**? Delete the `postgres.yaml` line from
-`kustomization.yaml` and point `DATABASE_URL` at your instance.
+Using a **managed/external database** instead of CloudNativePG? Remove
+`postgres-cluster.yaml` from `kustomization.yaml` and give the app a
+`DATABASE_URL` — e.g. add it to `secret.yaml` and reference it via `envFrom`, or
+change the `DATABASE_URL` `secretKeyRef` in `api.yaml`/`worker.yaml` to point at
+your own secret. A bare `postgresql://…` URL is fine; the app rewrites it to the
+psycopg3 driver automatically.
 
 Not using B2 yet? The app falls back to local disk, but that's per-pod and
 ephemeral in Kubernetes — configure B2 for any real deployment.
@@ -83,13 +95,16 @@ kubectl apply -k k8s/
 kubectl -n formula-se get pods -w
 ```
 
-The API/worker pods stay in `Init` until migrations finish, then become Ready.
-The bootstrap admin is created on first start from the Secret.
+The CloudNativePG `Cluster` bootstraps first; once its `formula-se-db-app`
+secret exists and the DB is reachable, the API/worker init containers run
+migrations, then the pods become Ready. The bootstrap admin is created on first
+start from the Secret.
 
 ## 4. Verify
 
 ```bash
-kubectl -n formula-se get deploy,sts,hpa,ingress
+kubectl -n formula-se get cluster            # CloudNativePG cluster health
+kubectl -n formula-se get deploy,hpa,ingress
 kubectl -n formula-se logs deploy/formula-se-api
 curl -sk https://formula-se.example.com/api/health
 ```
