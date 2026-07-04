@@ -37,6 +37,11 @@ exe_path = 'C:\SpaceEngineersDedicated\DedicatedServer64\SpaceEngineersDedicated
 exe_args = ["-console"]
 process_name = "SpaceEngineersDedicated.exe"
 
+# On a world swap, also set <IgnoreLastSession>true</IgnoreLastSession> so the
+# server loads the new world instead of resuming its last session. Default true;
+# set false to leave that field untouched.
+ignore_last_session = true
+
 # Option B — override with your own start/stop commands (a Windows service, a
 # .bat, NSSM, etc.). If set, these take precedence over exe_path.
 # start_cmd = "nssm start SEDedicated"

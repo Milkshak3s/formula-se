@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import subprocess
-import xml.etree.ElementTree as ET
 import zipfile
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -126,8 +126,17 @@ class WindowsSEController(ServerController):
     def set_active_world(self, folder_name: str) -> None:
         assert self.se.saves_dir is not None and self.se.config_path is not None
         world_path = str(Path(self.se.saves_dir) / folder_name)
-        _set_load_world(Path(self.se.config_path), world_path)
-        log.info("set <LoadWorld> -> %s", world_path)
+        values = {"LoadWorld": world_path}
+        # Force the server to load our world instead of resuming whatever session
+        # it had open — otherwise the swap is silently ignored on restart.
+        if self.se.ignore_last_session:
+            values["IgnoreLastSession"] = "true"
+        _edit_dedicated_cfg(Path(self.se.config_path), values)
+        log.info(
+            "set <LoadWorld> -> %s (IgnoreLastSession=%s)",
+            world_path,
+            self.se.ignore_last_session,
+        )
 
     def start(self) -> None:
         if self.se.start_cmd:
@@ -139,15 +148,42 @@ class WindowsSEController(ServerController):
         self._proc = _popen([str(self.se.exe_path), *self.se.exe_args])
 
 
-def _set_load_world(config_path: Path, world_path: str) -> None:
-    """Point the dedicated config's <LoadWorld> element at ``world_path``."""
-    tree = ET.parse(config_path)
-    root = tree.getroot()
-    el = root.find("LoadWorld")
-    if el is None:
-        el = ET.SubElement(root, "LoadWorld")
-    el.text = world_path
-    tree.write(config_path, encoding="utf-8", xml_declaration=True)
+def _apply_cfg_values(text: str, values: dict[str, str]) -> str:
+    """Set top-level ``<tag>value</tag>`` elements in a dedicated-server config.
+
+    A surgical string edit rather than an XML round-trip: SE's config carries
+    ``xmlns``/``xsi:nil`` declarations and CRLF formatting that ElementTree would
+    rewrite, so we touch only the requested tags and leave the rest byte-for-byte.
+    A function replacement is used so backslashes in Windows paths aren't treated
+    as regex group references.
+    """
+    for tag, value in values.items():
+        repl = f"<{tag}>{value}</{tag}>"
+        t = re.escape(tag)
+        pair = re.compile(rf"<{t}\s*>.*?</{t}\s*>", re.DOTALL)
+        selfclose = re.compile(rf"<{t}\s*/>")
+        if pair.search(text):
+            text = pair.sub(lambda _m: repl, text, count=1)
+        elif selfclose.search(text):
+            text = selfclose.sub(lambda _m: repl, text, count=1)
+        else:
+            # Not present — insert as a new child before the root's closing tag.
+            nl = "\r\n" if "\r\n" in text else "\n"
+            close = re.search(r"</[A-Za-z_][\w.\-]*>\s*$", text.strip())
+            if close:
+                pos = text.rfind(close.group(0))
+                text = text[:pos] + f"  {repl}{nl}" + text[pos:]
+    return text
+
+
+def _edit_dedicated_cfg(config_path: Path, values: dict[str, str]) -> None:
+    """Rewrite the given config fields, preserving BOM/encoding and the rest."""
+    raw = config_path.read_bytes()
+    bom = b"\xef\xbb\xbf"
+    has_bom = raw.startswith(bom)
+    text = (raw[len(bom):] if has_bom else raw).decode("utf-8")
+    text = _apply_cfg_values(text, values)
+    config_path.write_bytes((bom if has_bom else b"") + text.encode("utf-8"))
 
 
 def _process_running(name: str) -> bool:

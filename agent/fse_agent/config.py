@@ -37,6 +37,9 @@ class SEControlConfig:
     start_cmd: str | None = None
     stop_cmd: str | None = None
     process_name: str = "SpaceEngineersDedicated.exe"
+    # When swapping worlds, also set <IgnoreLastSession>true</IgnoreLastSession>
+    # so the server loads our world instead of resuming the last session.
+    ignore_last_session: bool = True
 
 
 @dataclass
@@ -75,6 +78,7 @@ class Config:
             start_cmd=se_raw.get("start_cmd"),
             stop_cmd=se_raw.get("stop_cmd"),
             process_name=se_raw.get("process_name", "SpaceEngineersDedicated.exe"),
+            ignore_last_session=bool(se_raw.get("ignore_last_session", True)),
         )
         return cls(
             api_base_url=str(api_base_url).rstrip("/"),
