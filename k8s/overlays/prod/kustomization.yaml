@@ -9,10 +9,10 @@ resources:
 images:
   - name: ghcr.io/milkshak3s/formula-se-backend
     newName: docker.io/gobworks/formula-se-backend
-    newTag: "0.1.2"
+    newTag: "0.1.3"
   - name: ghcr.io/milkshak3s/formula-se-web
     newName: docker.io/gobworks/formula-se-web
-    newTag: "0.1.1"
+    newTag: "0.1.2"
 
 patches:
   # Point the ingress at the real host + TLS secret.

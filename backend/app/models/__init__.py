@@ -8,6 +8,7 @@ from app.models.enums import (
     Role,
 )
 from app.models.job import Job
+from app.models.server import GameServer
 from app.models.ship import Blueprint, BlueprintSlot, Requirement, ShipClass
 from app.models.setting import AppSetting
 from app.models.user import Session as UserSession
@@ -28,6 +29,7 @@ __all__ = [
     "RequirementType",
     "Role",
     "Job",
+    "GameServer",
     "Blueprint",
     "BlueprintSlot",
     "Requirement",

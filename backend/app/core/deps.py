@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security import hash_agent_token
 from app.models.enums import Role
+from app.models.server import GameServer
 from app.models.user import Session as UserSession
 from app.models.user import User
 
@@ -47,6 +49,27 @@ def get_optional_user(
         return get_current_user(request, db)
     except HTTPException:
         return None
+
+
+def get_current_server(
+    request: Request, db: Session = Depends(get_db)
+) -> GameServer:
+    """Authenticate a server agent via an ``Authorization: Bearer <token>`` header.
+
+    Machine auth is deliberately header-based (not the session cookie), so the
+    agent needs no browser/cookie/CORS machinery.
+    """
+    auth = request.headers.get("Authorization", "")
+    scheme, _, token = auth.partition(" ")
+    token = token.strip()
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing agent token")
+    server = db.execute(
+        select(GameServer).where(GameServer.token_hash == hash_agent_token(token))
+    ).scalar_one_or_none()
+    if server is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid agent token")
+    return server
 
 
 def require_role(minimum: Role):

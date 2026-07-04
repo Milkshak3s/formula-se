@@ -1,0 +1,43 @@
+# Formula SE agent configuration. Copy to config.toml and edit.
+# Anything here can also come from the environment:
+#   FSE_AGENT_API_BASE_URL, FSE_AGENT_TOKEN, FSE_AGENT_DRY_RUN
+# (env wins — handy for keeping the secret token out of this file).
+
+# Base URL of the Formula SE app (no trailing /api).
+api_base_url = "https://fse.mlk.sh"
+
+# Bearer token shown once when an admin registers this server in the web UI
+# (Admin → Dedicated servers → Register). Prefer setting FSE_AGENT_TOKEN instead.
+token = "fsa_replace_me"
+
+# How often to poll when the server doesn't specify (seconds).
+poll_interval = 5
+
+# dry_run = true logs every action and never touches SE — use it to test the
+# whole pipeline (poll → download → "start") without a real install.
+dry_run = false
+
+# Set false only for a self-signed/dev endpoint.
+verify_tls = true
+
+# Local bookkeeping (created if missing).
+state_file = "fse-agent-state.json"
+download_dir = "fse-agent-downloads"
+
+[se]
+# Where the dedicated server keeps its worlds. The downloaded world is extracted
+# here as a new save folder.
+saves_dir = 'C:\Users\You\AppData\Roaming\SpaceEngineersDedicated\Instance\Saves'
+
+# The dedicated server config whose <LoadWorld> the agent repoints at the world.
+config_path = 'C:\Users\You\AppData\Roaming\SpaceEngineersDedicated\Instance\SpaceEngineers-Dedicated.cfg'
+
+# Option A — let the agent manage the process directly:
+exe_path = 'C:\SpaceEngineersDedicated\DedicatedServer64\SpaceEngineersDedicated.exe'
+exe_args = ["-console"]
+process_name = "SpaceEngineersDedicated.exe"
+
+# Option B — override with your own start/stop commands (a Windows service, a
+# .bat, NSSM, etc.). If set, these take precedence over exe_path.
+# start_cmd = "nssm start SEDedicated"
+# stop_cmd  = "nssm stop SEDedicated"

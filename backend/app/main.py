@@ -7,12 +7,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    agent,
     auth,
     blockdata,
     blueprints,
     files,
     maps,
     prepared_worlds,
+    servers,
     settings as settings_router,
     ship_classes,
     slots,
@@ -55,6 +57,8 @@ for router in (
     blueprints.router,
     maps.router,
     prepared_worlds.router,
+    servers.router,
+    agent.router,
     blockdata.router,
     settings_router.router,
     files.router,

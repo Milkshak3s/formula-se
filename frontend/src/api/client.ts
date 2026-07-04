@@ -4,8 +4,10 @@ import type {
   Blueprint,
   BlueprintHistory,
   GameMap,
+  GameServer,
   PreparedWorld,
   Requirement,
+  ServerCreated,
   ShipClass,
   Slot,
   User,
@@ -123,6 +125,22 @@ export const api = {
   }) => request<PreparedWorld>("/api/prepared-worlds", { method: "POST", ...json(data) }),
   downloadPreparedWorld: (id: string) =>
     request<{ url: string }>(`/api/prepared-worlds/${id}/download`),
+
+  // --- servers ---
+  listServers: () => request<GameServer[]>("/api/servers"),
+  createServer: (name: string) =>
+    request<ServerCreated>("/api/servers", { method: "POST", ...json({ name }) }),
+  rotateServerToken: (id: string) =>
+    request<ServerCreated>(`/api/servers/${id}/rotate-token`, { method: "POST" }),
+  deleteServer: (id: string) =>
+    request<void>(`/api/servers/${id}`, { method: "DELETE" }),
+  startServer: (id: string, prepared_world_id: string) =>
+    request<GameServer>(`/api/servers/${id}/start`, {
+      method: "POST",
+      ...json({ prepared_world_id }),
+    }),
+  stopServer: (id: string) =>
+    request<GameServer>(`/api/servers/${id}/stop`, { method: "POST" }),
 
   // --- block data ---
   blockDataStats: () => request<BlockDataStats>("/api/block-definitions"),

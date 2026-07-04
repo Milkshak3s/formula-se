@@ -128,3 +128,28 @@ export interface AppSettings {
   invite_code: string;
   server_push_enabled: boolean;
 }
+
+export type ServerReportedState =
+  | "offline"
+  | "idle"
+  | "starting"
+  | "running"
+  | "error";
+
+export interface GameServer {
+  id: string;
+  name: string;
+  token_prefix: string;
+  reported_state: ServerReportedState;
+  online: boolean;
+  desired_prepared_world_id: string | null;
+  reported_prepared_world_id: string | null;
+  last_error: string | null;
+  last_seen_at: string | null;
+  created_at: string;
+}
+
+// Returned only on register / rotate — carries the one-time plaintext token.
+export interface ServerCreated extends GameServer {
+  token: string;
+}

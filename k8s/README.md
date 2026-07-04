@@ -133,3 +133,13 @@ rollouts safe.
 ```bash
 kubectl kustomize k8s/overlays/prod | kubectl apply --dry-run=client -f -
 ```
+
+## Server agent (runs outside the cluster)
+
+Launching a prepared world on a live Space Engineers dedicated server is done by
+a small **agent that runs on the Windows game host**, not in Kubernetes. It polls
+`/api/agent/poll` with a bearer token (registered under **Admin → Dedicated
+servers**), downloads the world, and (re)starts the server. See
+[`../agent/README.md`](../agent/README.md). Nothing to deploy here — the cluster
+only needs the backend that serves the agent API (the `game_servers` table is
+created by the Alembic migration in the API/worker init container).
