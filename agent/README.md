@@ -24,9 +24,16 @@ and gets back a desired state:
 Progress (`starting` → `running`, or `error`) is reported straight back, so the
 Prepared Worlds page reflects it within a few seconds.
 
+## Download
+
+The easiest option: grab the prebuilt **`fse-agent.exe`** from the repo's
+[GitHub Releases](../../releases) (built by CI — no Python needed). Each release
+also ships `config.example.toml`. Drop both next to your dedicated server, fill in
+`config.toml`, and run the exe (see below). Building from source is optional.
+
 ## Prerequisites
 
-- Python **3.11+** on the host (or build the standalone `.exe`, below).
+- Python **3.11+** on the host — **or** just the downloaded `fse-agent.exe`.
 - A server registered in the web UI: **Admin → Dedicated servers → Register**.
   Copy the token it shows **once**.
 - **Settings → Enable dedicated-server push** turned on (Start/Stop is gated on
@@ -65,12 +72,22 @@ end to end before pointing it at a live server.
 
 ## Build a standalone `fse-agent.exe`
 
-So operators don't need Python installed:
+Normally you don't need to — CI publishes one to Releases. To build locally:
 
 ```powershell
 pip install pyinstaller
-pyinstaller --onefile --name fse-agent fse_agent/__main__.py
+pyinstaller --onefile --name fse-agent --clean run_agent.py
 # → dist\fse-agent.exe ;  run:  fse-agent.exe -c config.toml
+```
+
+`run_agent.py` is a thin launcher used because PyInstaller can't target the
+package's `__main__` module directly.
+
+**Maintainers:** the `agent-build` GitHub Action builds and tests the exe on every
+PR that touches `agent/`. Push a tag to publish a Release with the exe attached:
+
+```bash
+git tag agent-v1.0.0 && git push origin agent-v1.0.0
 ```
 
 ## Run as a Windows service

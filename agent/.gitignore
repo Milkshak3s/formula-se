@@ -1,0 +1,9 @@
+# PyInstaller build outputs (the exe is published via CI Releases, not committed)
+build/
+dist/
+*.spec
+
+# local agent runtime files
+fse-agent-state.json
+fse-agent-downloads/
+config.toml
