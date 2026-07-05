@@ -18,6 +18,7 @@ from app.api import (
     settings as settings_router,
     ship_classes,
     slots,
+    turns,
     users,
 )
 from app.core.config import settings
@@ -57,6 +58,7 @@ for router in (
     blueprints.router,
     maps.router,
     prepared_worlds.router,
+    turns.router,
     servers.router,
     agent.router,
     blockdata.router,

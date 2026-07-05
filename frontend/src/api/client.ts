@@ -10,6 +10,7 @@ import type {
   ServerCreated,
   ShipClass,
   Slot,
+  TurnState,
   User,
 } from "./types";
 
@@ -149,6 +150,10 @@ export const api = {
     form.append("file", file);
     return request<any>("/api/block-definitions", { method: "POST", body: form });
   },
+
+  // --- turns ---
+  getTurnState: () => request<TurnState>("/api/turns"),
+  advanceTurn: () => request<TurnState>("/api/turns/advance", { method: "POST" }),
 
   // --- settings ---
   getSettings: () => request<AppSettings>("/api/settings"),

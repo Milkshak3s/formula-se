@@ -1,5 +1,6 @@
 """SQLAlchemy models. Import everything here so Alembic/metadata sees them."""
 from app.models.blockdata import BlockDefinition
+from app.models.game import GameState, TurnEvent
 from app.models.enums import (
     BlueprintStatus,
     GridSize,
@@ -23,6 +24,8 @@ from app.models.world import (
 
 __all__ = [
     "BlockDefinition",
+    "GameState",
+    "TurnEvent",
     "BlueprintStatus",
     "GridSize",
     "PreparedWorldStatus",

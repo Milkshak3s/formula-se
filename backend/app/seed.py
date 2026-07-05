@@ -16,6 +16,7 @@ from app.models.blockdata import BlockDefinition
 from app.models.enums import Role
 from app.models.user import User
 from app.services.blockdata import load_seed_json, upsert_block_defs
+from app.services.turns import get_state
 
 
 def seed_block_definitions(db: Session) -> int:
@@ -60,3 +61,5 @@ def seed_bootstrap_admin(db: Session) -> User | None:
 def run_seeds(db: Session) -> None:
     seed_block_definitions(db)
     seed_bootstrap_admin(db)
+    # Ensure the singleton game-state row (turn 1) exists from first boot.
+    get_state(db)

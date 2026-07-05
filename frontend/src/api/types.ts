@@ -129,6 +129,22 @@ export interface AppSettings {
   server_push_enabled: boolean;
 }
 
+export interface TurnEvent {
+  id: string;
+  turn_number: number;
+  advanced_by: string | null;
+  advanced_by_name: string | null;
+  created_at: string;
+}
+
+export interface TurnState {
+  current_turn: number;
+  last_advanced_at: string | null;
+  last_advanced_by: string | null;
+  last_advanced_by_name: string | null;
+  history: TurnEvent[];
+}
+
 export type ServerReportedState =
   | "offline"
   | "idle"
