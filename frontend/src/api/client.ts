@@ -167,6 +167,11 @@ export const api = {
     }),
   updateHexTile: (id: string, data: { terrain?: HexTerrain; name?: string }) =>
     request<HexTile>(`/api/hex-map/tiles/${id}`, { method: "PATCH", ...json(data) }),
+  setTerrainMap: (terrain: HexTerrain, game_map_id: string | null) =>
+    request<HexMap>(`/api/hex-map/terrain-maps/${terrain}`, {
+      method: "PUT",
+      ...json({ game_map_id }),
+    }),
 
   // --- settings ---
   getSettings: () => request<AppSettings>("/api/settings"),

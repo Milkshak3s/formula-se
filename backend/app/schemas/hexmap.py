@@ -17,11 +17,24 @@ class HexTileOut(BaseModel):
     name: str
 
 
+class TerrainMapOut(BaseModel):
+    terrain: HexTerrain
+    game_map_id: uuid.UUID
+    game_map_name: str
+
+
 class HexMapOut(BaseModel):
     id: int
     name: str
     radius: int
     tiles: list[HexTileOut] = Field(default_factory=list)
+    # Terrain→map assignments; a sector resolves its map via its terrain.
+    terrain_maps: list[TerrainMapOut] = Field(default_factory=list)
+
+
+class TerrainMapUpdate(BaseModel):
+    # None clears the assignment for this terrain.
+    game_map_id: uuid.UUID | None = None
 
 
 class HexMapRegenerate(BaseModel):

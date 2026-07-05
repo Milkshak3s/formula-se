@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from app.core.database import Base
 from app.models.enums import HexTerrain
-from app.models.hexmap import DEFAULT_RADIUS, MAX_RADIUS, MIN_RADIUS, HexMap, HexTile
-from app.schemas.hexmap import HexMapOut, HexTileOut
+from app.models.hexmap import (
+    DEFAULT_RADIUS,
+    MAX_RADIUS,
+    MIN_RADIUS,
+    HexMap,
+    HexTile,
+    SectorTerrainMap,
+)
+from app.schemas.hexmap import HexMapOut, HexTileOut, TerrainMapOut, TerrainMapUpdate
 from app.services.hexmap import (
     AXIAL_DIRECTIONS,
     clamp_radius,
@@ -21,7 +28,25 @@ def test_tables_are_registered_with_metadata():
     tables = set(Base.metadata.tables)
     assert HexMap.__tablename__ == "hex_map"
     assert HexTile.__tablename__ == "hex_tiles"
-    assert {"hex_map", "hex_tiles"} <= tables
+    assert SectorTerrainMap.__tablename__ == "sector_terrain_maps"
+    assert {"hex_map", "hex_tiles", "sector_terrain_maps"} <= tables
+
+
+def test_terrain_map_fk_cascades_with_the_game_map():
+    # Removing a GameMap must clear its terrain associations (reference-only).
+    fk = list(SectorTerrainMap.__table__.foreign_keys)[0]
+    assert fk.column.table.name == "game_maps"
+    assert fk.ondelete == "CASCADE"
+
+
+def test_terrain_map_update_defaults_to_clear():
+    # A body with no game_map_id means "clear the association".
+    assert TerrainMapUpdate().game_map_id is None
+
+
+def test_hex_map_out_defaults_to_no_terrain_maps():
+    m = HexMapOut(id=1, name="Campaign Sector", radius=2)
+    assert m.terrain_maps == []
 
 
 def test_tiles_in_radius_counts_the_centred_hexagon():
@@ -99,6 +124,10 @@ def test_schema_round_trips_from_attributes():
     assert out.terrain == HexTerrain.nebula
     assert out.name == "Rift"
 
-    m = HexMapOut(id=1, name="Campaign Sector", radius=2, tiles=[out])
+    tm = TerrainMapOut(
+        terrain=HexTerrain.planet, game_map_id=uuid.uuid4(), game_map_name="Barren World"
+    )
+    m = HexMapOut(id=1, name="Campaign Sector", radius=2, tiles=[out], terrain_maps=[tm])
     assert m.radius == 2
     assert m.tiles[0].terrain == HexTerrain.nebula
+    assert m.terrain_maps[0].game_map_name == "Barren World"

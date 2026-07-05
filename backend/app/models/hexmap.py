@@ -12,8 +12,11 @@ anchor those systems attach to. None of that is built here.
 """
 from __future__ import annotations
 
-from sqlalchemy import Enum, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+import uuid
+
+from sqlalchemy import Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.enums import HexTerrain
@@ -56,3 +59,32 @@ class HexTile(UUIDPk, Timestamped, Base):
     )
     # Optional operator/lore label for a notable sector (empty for most hexes).
     name: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+
+class SectorTerrainMap(Base):
+    """Associates each sector *terrain type* with a :class:`GameMap` world-save.
+
+    Keyed by terrain (a fixed enum domain), so there is at most one map per
+    terrain, and many terrains may point at the same map. A hex tile resolves to
+    a single map through its terrain — the arena/asset set a future battle or
+    station-construction action loads for that sector.
+
+    This is a **reference only**: the map file is not copied or snapshotted per
+    sector, and per-action changes to the loaded map are intentionally *not*
+    persisted in this iteration. Deleting the underlying ``GameMap`` cascades and
+    simply clears the association (the terrain reverts to "no map").
+    """
+
+    __tablename__ = "sector_terrain_maps"
+
+    terrain: Mapped[HexTerrain] = mapped_column(
+        Enum(HexTerrain, name="hex_terrain", native_enum=False),
+        primary_key=True,
+    )
+    game_map_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game_maps.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    game_map = relationship("GameMap")

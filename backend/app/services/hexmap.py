@@ -8,9 +8,11 @@ map row and its hex set.
 """
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import HexTerrain
 from app.models.hexmap import (
@@ -20,6 +22,7 @@ from app.models.hexmap import (
     SINGLETON_ID,
     HexMap,
     HexTile,
+    SectorTerrainMap,
 )
 
 # The six axial neighbour directions (pointy-top), in clockwise order from East.
@@ -121,6 +124,40 @@ def generate_tiles(db: Session, radius: int) -> int:
         HexTile(q=q, r=r, terrain=terrain_for(q, r)) for q, r in coords
     )
     return len(coords)
+
+
+def get_terrain_maps(db: Session) -> list[SectorTerrainMap]:
+    """Return every terrain→map association, with the GameMap eagerly loaded."""
+    return list(
+        db.execute(
+            select(SectorTerrainMap).options(
+                selectinload(SectorTerrainMap.game_map)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+def set_terrain_map(
+    db: Session, terrain: HexTerrain, game_map_id: uuid.UUID | None
+) -> SectorTerrainMap | None:
+    """Assign (or clear) the GameMap backing a terrain type. Caller commits.
+
+    ``game_map_id=None`` removes the association (the terrain reverts to no map).
+    Returns the resulting association row, or ``None`` when cleared.
+    """
+    row = db.get(SectorTerrainMap, terrain)
+    if game_map_id is None:
+        if row is not None:
+            db.delete(row)
+        return None
+    if row is None:
+        row = SectorTerrainMap(terrain=terrain, game_map_id=game_map_id)
+        db.add(row)
+    else:
+        row.game_map_id = game_map_id
+    return row
 
 
 def ensure_tiles(db: Session) -> int:

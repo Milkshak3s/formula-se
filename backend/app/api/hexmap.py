@@ -14,10 +14,25 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
+from app.models.enums import HexTerrain
 from app.models.hexmap import HexMap, HexTile
 from app.models.user import User
-from app.schemas.hexmap import HexMapOut, HexMapRegenerate, HexTileOut, HexTileUpdate
-from app.services.hexmap import ensure_tiles, generate_tiles, get_map
+from app.models.world import GameMap
+from app.schemas.hexmap import (
+    HexMapOut,
+    HexMapRegenerate,
+    HexTileOut,
+    HexTileUpdate,
+    TerrainMapOut,
+    TerrainMapUpdate,
+)
+from app.services.hexmap import (
+    ensure_tiles,
+    generate_tiles,
+    get_map,
+    get_terrain_maps,
+    set_terrain_map,
+)
 
 router = APIRouter(prefix="/api/hex-map", tags=["hex-map"])
 
@@ -33,6 +48,14 @@ def _map_out(db: Session, m: HexMap) -> HexMapOut:
         name=m.name,
         radius=m.radius,
         tiles=[HexTileOut.model_validate(t) for t in tiles],
+        terrain_maps=[
+            TerrainMapOut(
+                terrain=tm.terrain,
+                game_map_id=tm.game_map_id,
+                game_map_name=tm.game_map.name,
+            )
+            for tm in get_terrain_maps(db)
+        ],
     )
 
 
@@ -53,6 +76,22 @@ def regenerate(
     if payload.name is not None:
         m.name = payload.name
     generate_tiles(db, payload.radius)
+    db.commit()
+    return _map_out(db, get_map(db))
+
+
+@router.put("/terrain-maps/{terrain}", response_model=HexMapOut)
+def set_terrain_map_endpoint(
+    terrain: HexTerrain,
+    payload: TerrainMapUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Assign (or clear, with ``game_map_id: null``) the map backing a terrain."""
+    if payload.game_map_id is not None:
+        if db.get(GameMap, payload.game_map_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Game map not found")
+    set_terrain_map(db, terrain, payload.game_map_id)
     db.commit()
     return _map_out(db, get_map(db))
 

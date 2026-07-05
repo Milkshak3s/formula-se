@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { useToast } from "../components/toast";
 import { Card, EmptyState, Modal, PageHeader, Spinner } from "../components/ui";
-import type { HexMap, HexTerrain, HexTile } from "../api/types";
+import type { GameMap, HexMap, HexTerrain, HexTile, TerrainMap } from "../api/types";
 
 // --- hex geometry (pointy-top, axial coords) — see redblobgames.com/grids/hexagons
 const SIZE = 30; // hex circumradius in SVG units
@@ -58,8 +58,14 @@ export default function HexMapPage() {
   const map = useQuery({ queryKey: ["hex-map"], queryFn: api.getHexMap });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [regenOpen, setRegenOpen] = useState(false);
+  const [terrainMapsOpen, setTerrainMapsOpen] = useState(false);
 
   const selected = map.data?.tiles.find((t) => t.id === selectedId) ?? null;
+  const mapByTerrain = useMemo(() => {
+    const m: Partial<Record<HexTerrain, TerrainMap>> = {};
+    for (const tm of map.data?.terrain_maps ?? []) m[tm.terrain] = tm;
+    return m;
+  }, [map.data?.terrain_maps]);
 
   return (
     <div>
@@ -68,9 +74,14 @@ export default function HexMapPage() {
         subtitle="The campaign's hex grid. Sectors will host stations and ship movements."
         action={
           isAdmin && (
-            <button className="btn-primary" onClick={() => setRegenOpen(true)}>
-              Regenerate grid
-            </button>
+            <div className="flex gap-2">
+              <button className="btn-ghost" onClick={() => setTerrainMapsOpen(true)}>
+                Terrain maps
+              </button>
+              <button className="btn-primary" onClick={() => setRegenOpen(true)}>
+                Regenerate grid
+              </button>
+            </div>
           )
         }
       />
@@ -85,7 +96,12 @@ export default function HexMapPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <HexGrid map={map.data} selectedId={selectedId} onSelect={setSelectedId} />
-          <SectorPanel tile={selected} isAdmin={isAdmin} onDeselect={() => setSelectedId(null)} />
+          <SectorPanel
+            tile={selected}
+            terrainMap={selected ? mapByTerrain[selected.terrain] ?? null : null}
+            isAdmin={isAdmin}
+            onDeselect={() => setSelectedId(null)}
+          />
         </div>
       )}
 
@@ -97,6 +113,12 @@ export default function HexMapPage() {
             setSelectedId(null);
             setRegenOpen(false);
           }}
+        />
+      )}
+      {terrainMapsOpen && map.data && (
+        <TerrainMapsModal
+          assignments={mapByTerrain}
+          onClose={() => setTerrainMapsOpen(false)}
         />
       )}
     </div>
@@ -175,10 +197,12 @@ function HexGrid({
 
 function SectorPanel({
   tile,
+  terrainMap,
   isAdmin,
   onDeselect,
 }: {
   tile: HexTile | null;
+  terrainMap: TerrainMap | null;
   isAdmin: boolean;
   onDeselect: () => void;
 }) {
@@ -214,6 +238,22 @@ function SectorPanel({
           style={{ background: meta.marker ?? "#39415f" }}
         />
         <span className="text-sm font-medium">{meta.label}</span>
+      </div>
+
+      <div className="mt-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted">Game map</div>
+        {terrainMap ? (
+          <p className="text-sm mt-0.5">{terrainMap.game_map_name}</p>
+        ) : (
+          <p className="text-xs text-muted/80 mt-0.5">
+            No map assigned to {meta.label.toLowerCase()} sectors.
+          </p>
+        )}
+        {isAdmin && (
+          <p className="text-[11px] text-muted/70 mt-1">
+            Set per-terrain via “Terrain maps”. Loaded for future battles &amp; construction.
+          </p>
+        )}
       </div>
 
       {/* Placeholders for the systems this map is being built to host. */}
@@ -358,6 +398,86 @@ function RegenerateModal({
           </button>
           <button className="btn-primary" disabled={save.isPending} onClick={() => save.mutate()}>
             {save.isPending ? "Regenerating…" : "Regenerate"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function TerrainMapsModal({
+  assignments,
+  onClose,
+}: {
+  assignments: Partial<Record<HexTerrain, TerrainMap>>;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const maps = useQuery({ queryKey: ["maps"], queryFn: api.listMaps });
+
+  const set = useMutation({
+    mutationFn: ({ terrain, mapId }: { terrain: HexTerrain; mapId: string | null }) =>
+      api.setTerrainMap(terrain, mapId),
+    onSuccess: () => {
+      toast("Terrain map updated.", "success");
+      qc.invalidateQueries({ queryKey: ["hex-map"] });
+    },
+    onError: (e: any) => toast(e.message ?? "Could not update the terrain map", "error"),
+  });
+
+  return (
+    <Modal open onClose={onClose} title="Terrain maps">
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          Assign a Game Map to each terrain type. Every sector of that terrain loads
+          this map for future battles and station construction. One map can back
+          several terrains; the map itself isn’t modified by play.
+        </p>
+        {maps.isLoading ? (
+          <Spinner label="Loading game maps…" />
+        ) : !maps.data?.length ? (
+          <EmptyState
+            title="No game maps yet"
+            hint="Upload a world save on the Game Maps page first."
+          />
+        ) : (
+          <div className="space-y-2">
+            {TERRAIN_ORDER.map((terrain) => {
+              const meta = TERRAIN[terrain];
+              const current = assignments[terrain]?.game_map_id ?? "";
+              return (
+                <div key={terrain} className="flex items-center gap-3">
+                  <span className="flex items-center gap-2 w-36 shrink-0">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ background: meta.marker ?? "#39415f" }}
+                    />
+                    <span className="text-sm">{meta.label}</span>
+                  </span>
+                  <select
+                    className="input"
+                    value={current}
+                    disabled={set.isPending}
+                    onChange={(e) =>
+                      set.mutate({ terrain, mapId: e.target.value || null })
+                    }
+                  >
+                    <option value="">— No map —</option>
+                    {(maps.data as GameMap[]).map((gm) => (
+                      <option key={gm.id} value={gm.id}>
+                        {gm.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <button className="btn-primary" onClick={onClose}>
+            Done
           </button>
         </div>
       </div>

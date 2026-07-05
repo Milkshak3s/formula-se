@@ -161,11 +161,18 @@ export interface HexTile {
   name: string;
 }
 
+export interface TerrainMap {
+  terrain: HexTerrain;
+  game_map_id: string;
+  game_map_name: string;
+}
+
 export interface HexMap {
   id: number;
   name: string;
   radius: number;
   tiles: HexTile[];
+  terrain_maps: TerrainMap[];
 }
 
 export type ServerReportedState =
