@@ -2,12 +2,14 @@
 from app.models.blockdata import BlockDefinition
 from app.models.game import GameState, TurnEvent
 from app.models.hexmap import HexMap, HexTile, SectorTerrainMap
+from app.models.resource import ResourceBalance
 from app.models.enums import (
     BlueprintStatus,
     GridSize,
     HexTerrain,
     PreparedWorldStatus,
     RequirementType,
+    ResourceType,
     Role,
 )
 from app.models.job import Job
@@ -31,11 +33,13 @@ __all__ = [
     "HexMap",
     "HexTile",
     "SectorTerrainMap",
+    "ResourceBalance",
     "BlueprintStatus",
     "GridSize",
     "HexTerrain",
     "PreparedWorldStatus",
     "RequirementType",
+    "ResourceType",
     "Role",
     "Job",
     "GameServer",

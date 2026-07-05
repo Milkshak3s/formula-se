@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { useToast } from "../components/toast";
 import { Card, PageHeader } from "../components/ui";
+import type { ResourceType } from "../api/types";
 
 function Stat({ label, value, to }: { label: string; value: number | string; to: string }) {
   return (
@@ -63,6 +64,52 @@ function TurnBanner() {
   );
 }
 
+const RESOURCE_META: Record<ResourceType, { label: string; color: string }> = {
+  iron_ingot: { label: "Iron Ingots", color: "#8a8f98" },
+  nickel_ingot: { label: "Nickel Ingots", color: "#9fb6a6" },
+  silicon_wafer: { label: "Silicon Wafers", color: "#5aa9d6" },
+  cobalt_ingot: { label: "Cobalt Ingots", color: "#3f6fd1" },
+};
+
+function ResourceTreasury() {
+  const { data, isLoading } = useQuery({ queryKey: ["resources"], queryFn: api.getResources });
+
+  return (
+    <Card className="mb-6">
+      <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-3">
+        Campaign resources
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {(data?.balances ?? []).map((b) => {
+          const meta = RESOURCE_META[b.resource];
+          return (
+            <div key={b.resource} className="rounded-xl border border-border p-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ background: meta.color }}
+                />
+                <span className="text-xs text-muted truncate">{meta.label}</span>
+              </div>
+              <div className="text-2xl font-bold mt-1 tabular-nums">
+                {b.amount.toLocaleString()}
+              </div>
+            </div>
+          );
+        })}
+        {isLoading &&
+          !data &&
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-border p-3">
+              <div className="text-xs text-muted">Loading…</div>
+              <div className="text-2xl font-bold mt-1 tabular-nums">—</div>
+            </div>
+          ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const slots = useQuery({ queryKey: ["slots"], queryFn: api.listSlots });
@@ -80,6 +127,8 @@ export default function DashboardPage() {
       />
 
       <TurnBanner />
+
+      <ResourceTreasury />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="Ship classes" value={classes.data?.length ?? 0} to="/ship-classes" />

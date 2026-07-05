@@ -10,6 +10,7 @@ import type {
   HexTile,
   PreparedWorld,
   Requirement,
+  ResourceState,
   ServerCreated,
   ShipClass,
   Slot,
@@ -153,6 +154,9 @@ export const api = {
     form.append("file", file);
     return request<any>("/api/block-definitions", { method: "POST", body: form });
   },
+
+  // --- resources ---
+  getResources: () => request<ResourceState>("/api/resources"),
 
   // --- turns ---
   getTurnState: () => request<TurnState>("/api/turns"),

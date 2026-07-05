@@ -17,6 +17,7 @@ from app.models.enums import Role
 from app.models.user import User
 from app.services.blockdata import load_seed_json, upsert_block_defs
 from app.services.hexmap import ensure_tiles
+from app.services.resources import ensure_balances
 from app.services.turns import get_state
 
 
@@ -66,3 +67,5 @@ def run_seeds(db: Session) -> None:
     get_state(db)
     # Ensure the singleton sector map exists and its default grid is populated.
     ensure_tiles(db)
+    # Ensure the campaign resource treasury exists (5000 of each to start).
+    ensure_balances(db)

@@ -145,6 +145,21 @@ export interface TurnState {
   history: TurnEvent[];
 }
 
+export type ResourceType =
+  | "iron_ingot"
+  | "nickel_ingot"
+  | "silicon_wafer"
+  | "cobalt_ingot";
+
+export interface ResourceBalance {
+  resource: ResourceType;
+  amount: number;
+}
+
+export interface ResourceState {
+  balances: ResourceBalance[];
+}
+
 export type HexTerrain =
   | "deep_space"
   | "asteroid_field"

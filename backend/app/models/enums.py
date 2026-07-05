@@ -60,6 +60,20 @@ class PreparedWorldStatus(str, enum.Enum):
     expired = "expired"
 
 
+class ResourceType(str, enum.Enum):
+    """The campaign's tracked resources — the basis of future construction costs.
+
+    Values are the stable storage keys; human labels (\"Iron Ingots\", …) live in
+    the presentation layer. New resources can be appended without touching the
+    row-per-resource treasury schema.
+    """
+
+    iron_ingot = "iron_ingot"
+    nickel_ingot = "nickel_ingot"
+    silicon_wafer = "silicon_wafer"
+    cobalt_ingot = "cobalt_ingot"
+
+
 class HexTerrain(str, enum.Enum):
     """Flavour/terrain of a sector-map hex.
 
