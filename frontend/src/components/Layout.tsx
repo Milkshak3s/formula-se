@@ -17,6 +17,7 @@ const NAV: NavItem[] = [
   { to: "/slots", label: "Blueprint Slots" },
   { to: "/maps", label: "Game Maps" },
   { to: "/sector-map", label: "Sector Map" },
+  { to: "/station-types", label: "Station Types" },
   { to: "/start-world", label: "Start a World", role: "commander" },
   { to: "/prepared-worlds", label: "Prepared Worlds" },
   { to: "/admin", label: "Admin", role: "admin" },

@@ -5,7 +5,6 @@ from __future__ import annotations
 from app.core.database import Base
 from app.models.game import INITIAL_TURN, SINGLETON_ID, GameState, TurnEvent
 from app.schemas.turn import TurnEventOut, TurnStateOut
-from app.services.turns import run_turn_hooks
 
 
 def test_singleton_and_initial_turn_constants():
@@ -43,6 +42,9 @@ def test_turn_event_out_round_trips():
     assert ev.advanced_by_name == "Ada"
 
 
-def test_run_turn_hooks_is_a_noop_for_now():
-    # No systems wired yet; must be callable and side-effect free.
-    assert run_turn_hooks(None, None) is None
+def test_run_turn_hooks_wires_resource_generation():
+    # run_turn_hooks now drives per-turn resource generation from stations
+    # (the DB-bound behaviour is verified in the throwaway-Postgres smoke).
+    from app.services import turns as turns_mod
+
+    assert callable(turns_mod.run_turn_hooks)

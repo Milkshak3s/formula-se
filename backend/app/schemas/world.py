@@ -6,6 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import PreparedWorldStatus
+from app.schemas.station import StationSlotIn, StationSlotOut
 
 
 class StartSlotIn(BaseModel):
@@ -40,6 +41,7 @@ class MapUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=160)
     description: str | None = None
     start_slots: list[StartSlotIn] | None = None
+    station_slots: list[StationSlotIn] | None = None
 
 
 class MapOut(BaseModel):
@@ -49,6 +51,7 @@ class MapOut(BaseModel):
     description: str
     created_at: datetime
     start_slots: list[StartSlotOut] = Field(default_factory=list)
+    station_slots: list[StationSlotOut] = Field(default_factory=list)
 
 
 class AssignmentIn(BaseModel):

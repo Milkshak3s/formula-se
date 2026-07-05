@@ -14,6 +14,9 @@ import type {
   ServerCreated,
   ShipClass,
   Slot,
+  Station,
+  StationKind,
+  StationType,
   TurnState,
   User,
 } from "./types";
@@ -157,6 +160,40 @@ export const api = {
 
   // --- resources ---
   getResources: () => request<ResourceState>("/api/resources"),
+
+  // --- station types ---
+  listStationTypes: () => request<StationType[]>("/api/station-types"),
+  createStationType: (data: {
+    name: string;
+    kind: StationKind;
+    description: string;
+    cost: Record<string, number>;
+    produced_resource: string | null;
+    production_amount: number;
+  }) => request<StationType>("/api/station-types", { method: "POST", ...json(data) }),
+  updateStationType: (id: string, data: any) =>
+    request<StationType>(`/api/station-types/${id}`, { method: "PATCH", ...json(data) }),
+  deleteStationType: (id: string) =>
+    request<void>(`/api/station-types/${id}`, { method: "DELETE" }),
+  uploadStationBlueprint: (id: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<StationType>(`/api/station-types/${id}/blueprint`, {
+      method: "POST",
+      body: form,
+    });
+  },
+  stationThumbnailUrl: (id: string) => `/api/station-types/${id}/thumbnail`,
+
+  // --- stations ---
+  listStations: () => request<Station[]>("/api/stations"),
+  buildStation: (hex_tile_id: string, station_type_id: string) =>
+    request<Station>("/api/stations", {
+      method: "POST",
+      ...json({ hex_tile_id, station_type_id }),
+    }),
+  demolishStation: (id: string) =>
+    request<void>(`/api/stations/${id}`, { method: "DELETE" }),
 
   // --- turns ---
   getTurnState: () => request<TurnState>("/api/turns"),

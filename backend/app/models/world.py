@@ -28,6 +28,12 @@ class GameMap(UUIDPk, Timestamped, Base):
         cascade="all, delete-orphan",
         order_by="StartSlot.position_index",
     )
+    # Station-grid injection points (added in the station-construction feature).
+    station_slots: Mapped[list["StationSlot"]] = relationship(
+        back_populates="map",
+        cascade="all, delete-orphan",
+        order_by="StationSlot.position_index",
+    )
 
 
 class StartSlot(UUIDPk, Timestamped, Base):

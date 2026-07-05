@@ -116,6 +116,7 @@ export default function DashboardPage() {
   const classes = useQuery({ queryKey: ["ship-classes"], queryFn: api.listShipClasses });
   const maps = useQuery({ queryKey: ["maps"], queryFn: api.listMaps });
   const worlds = useQuery({ queryKey: ["prepared-worlds"], queryFn: api.listPreparedWorlds });
+  const stations = useQuery({ queryKey: ["stations"], queryFn: api.listStations });
 
   const filled = (slots.data ?? []).filter((s) => s.active_blueprint).length;
 
@@ -130,7 +131,7 @@ export default function DashboardPage() {
 
       <ResourceTreasury />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Stat label="Ship classes" value={classes.data?.length ?? 0} to="/ship-classes" />
         <Stat
           label="Slots filled"
@@ -138,6 +139,7 @@ export default function DashboardPage() {
           to="/slots"
         />
         <Stat label="Game maps" value={maps.data?.length ?? 0} to="/maps" />
+        <Stat label="Stations" value={stations.data?.length ?? 0} to="/sector-map" />
         <Stat
           label="Prepared worlds"
           value={worlds.data?.length ?? 0}

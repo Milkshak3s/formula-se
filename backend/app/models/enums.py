@@ -74,6 +74,17 @@ class ResourceType(str, enum.Enum):
     cobalt_ingot = "cobalt_ingot"
 
 
+class StationKind(str, enum.Enum):
+    """The two station variations in this feature pass.
+
+    ``resource`` stations generate a configured resource each turn; ``shipyard``
+    stations enable ship construction (built out in a later pass).
+    """
+
+    resource = "resource"
+    shipyard = "shipyard"
+
+
 class HexTerrain(str, enum.Enum):
     """Flavour/terrain of a sector-map hex.
 

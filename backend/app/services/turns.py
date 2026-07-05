@@ -58,11 +58,15 @@ def advance_turn(db: Session, user: User) -> GameState:
 
 
 def run_turn_hooks(db: Session, state: GameState) -> None:
-    """Hook point for per-turn gameplay systems (added later).
+    """Per-turn gameplay systems, run inside ``advance_turn``'s transaction.
 
-    Runs inside ``advance_turn``'s transaction — after the turn number is bumped
-    and before commit — so anything a system writes lands atomically with the
-    turn change (a failing system rolls the whole advance back). No systems are
-    wired yet.
+    After the turn number is bumped and before commit, so anything a system
+    writes lands atomically with the turn change (a failing system rolls the
+    whole advance back). Imported lazily to avoid a stations↔turns import cycle.
+
+    Wired systems:
+      * resource generation — each resource station credits the treasury.
     """
-    return None
+    from app.services.stations import generate_turn_resources
+
+    generate_turn_resources(db)

@@ -78,12 +78,55 @@ export interface StartSlot {
   ship_class_ids: string[];
 }
 
+export interface StationSlot {
+  id: string;
+  map_id: string;
+  name: string;
+  position_index: number;
+  gps_x: number;
+  gps_y: number;
+  gps_z: number;
+}
+
 export interface GameMap {
   id: string;
   name: string;
   description: string;
   created_at: string;
   start_slots: StartSlot[];
+  station_slots: StationSlot[];
+}
+
+export type StationKind = "resource" | "shipyard";
+
+export interface StationType {
+  id: string;
+  name: string;
+  kind: StationKind;
+  description: string;
+  cost: Partial<Record<ResourceType, number>>;
+  produced_resource: ResourceType | null;
+  production_amount: number;
+  has_blueprint: boolean;
+  stats: Record<string, any>;
+  is_starter: boolean;
+  created_at: string;
+}
+
+export interface Station {
+  id: string;
+  hex_tile_id: string;
+  q: number;
+  r: number;
+  station_type_id: string;
+  station_type_name: string;
+  kind: StationKind;
+  produced_resource: ResourceType | null;
+  production_amount: number;
+  built_by: string | null;
+  built_by_name: string | null;
+  built_on_turn: number;
+  created_at: string;
 }
 
 export type PreparedWorldStatus =

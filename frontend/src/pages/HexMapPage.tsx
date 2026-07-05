@@ -4,7 +4,30 @@ import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { useToast } from "../components/toast";
 import { Card, EmptyState, Modal, PageHeader, Spinner } from "../components/ui";
-import type { GameMap, HexMap, HexTerrain, HexTile, TerrainMap } from "../api/types";
+import type {
+  GameMap,
+  HexMap,
+  HexTerrain,
+  HexTile,
+  ResourceType,
+  Station,
+  StationType,
+  TerrainMap,
+} from "../api/types";
+
+const RESOURCE_LABELS: Record<ResourceType, string> = {
+  iron_ingot: "Iron Ingots",
+  nickel_ingot: "Nickel Ingots",
+  silicon_wafer: "Silicon Wafers",
+  cobalt_ingot: "Cobalt Ingots",
+};
+
+function costSummary(cost: Partial<Record<ResourceType, number>>): string {
+  const parts = (Object.keys(RESOURCE_LABELS) as ResourceType[])
+    .filter((r) => (cost[r] ?? 0) > 0)
+    .map((r) => `${cost[r]!.toLocaleString()} ${RESOURCE_LABELS[r]}`);
+  return parts.length ? parts.join(" · ") : "Free";
+}
 
 // --- hex geometry (pointy-top, axial coords) — see redblobgames.com/grids/hexagons
 const SIZE = 30; // hex circumradius in SVG units
@@ -55,10 +78,13 @@ const TERRAIN_ORDER: HexTerrain[] = [
 export default function HexMapPage() {
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
+  const isCommander = hasRole("commander");
   const map = useQuery({ queryKey: ["hex-map"], queryFn: api.getHexMap });
+  const stations = useQuery({ queryKey: ["stations"], queryFn: api.listStations });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [regenOpen, setRegenOpen] = useState(false);
   const [terrainMapsOpen, setTerrainMapsOpen] = useState(false);
+  const [buildTile, setBuildTile] = useState<HexTile | null>(null);
 
   const selected = map.data?.tiles.find((t) => t.id === selectedId) ?? null;
   const mapByTerrain = useMemo(() => {
@@ -66,6 +92,11 @@ export default function HexMapPage() {
     for (const tm of map.data?.terrain_maps ?? []) m[tm.terrain] = tm;
     return m;
   }, [map.data?.terrain_maps]);
+  const stationsByTile = useMemo(() => {
+    const m: Record<string, Station[]> = {};
+    for (const s of stations.data ?? []) (m[s.hex_tile_id] ??= []).push(s);
+    return m;
+  }, [stations.data]);
 
   return (
     <div>
@@ -95,11 +126,19 @@ export default function HexMapPage() {
         />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          <HexGrid map={map.data} selectedId={selectedId} onSelect={setSelectedId} />
+          <HexGrid
+            map={map.data}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            stationsByTile={stationsByTile}
+          />
           <SectorPanel
             tile={selected}
             terrainMap={selected ? mapByTerrain[selected.terrain] ?? null : null}
+            stations={selected ? stationsByTile[selected.id] ?? [] : []}
             isAdmin={isAdmin}
+            isCommander={isCommander}
+            onBuild={() => selected && setBuildTile(selected)}
             onDeselect={() => setSelectedId(null)}
           />
         </div>
@@ -121,6 +160,13 @@ export default function HexMapPage() {
           onClose={() => setTerrainMapsOpen(false)}
         />
       )}
+      {buildTile && (
+        <BuildStationModal
+          tile={buildTile}
+          onClose={() => setBuildTile(null)}
+          onBuilt={() => setBuildTile(null)}
+        />
+      )}
     </div>
   );
 }
@@ -129,10 +175,12 @@ function HexGrid({
   map,
   selectedId,
   onSelect,
+  stationsByTile,
 }: {
   map: HexMap;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  stationsByTile: Record<string, Station[]>;
 }) {
   const { placed, viewBox } = useMemo(() => {
     const placed = map.tiles.map((t) => {
@@ -176,6 +224,30 @@ function HexGrid({
                   fill={meta.marker}
                 />
               )}
+              {(stationsByTile[tile.id]?.length ?? 0) > 0 && (
+                <>
+                  <rect
+                    x={x + SIZE * 0.28}
+                    y={y - SIZE * 0.62}
+                    width={9}
+                    height={9}
+                    rx={1.5}
+                    fill="#0d1020"
+                    stroke="#f0b64a"
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={x + SIZE * 0.28 + 4.5}
+                    y={y - SIZE * 0.62 + 7}
+                    textAnchor="middle"
+                    fontSize="7"
+                    fontWeight="bold"
+                    fill="#f0b64a"
+                  >
+                    {stationsByTile[tile.id].length}
+                  </text>
+                </>
+              )}
               {tile.name && (
                 <text
                   x={x}
@@ -198,12 +270,18 @@ function HexGrid({
 function SectorPanel({
   tile,
   terrainMap,
+  stations,
   isAdmin,
+  isCommander,
+  onBuild,
   onDeselect,
 }: {
   tile: HexTile | null;
   terrainMap: TerrainMap | null;
+  stations: Station[];
   isAdmin: boolean;
+  isCommander: boolean;
+  onBuild: () => void;
   onDeselect: () => void;
 }) {
   if (!tile) {
@@ -256,11 +334,49 @@ function SectorPanel({
         )}
       </div>
 
-      {/* Placeholders for the systems this map is being built to host. */}
+      <div className="mt-4 border-t border-border pt-3">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Stations ({stations.length})
+          </div>
+          {isCommander && (
+            <button className="btn-primary text-xs py-1" onClick={onBuild}>
+              + Build
+            </button>
+          )}
+        </div>
+        {stations.length ? (
+          <ul className="mt-2 space-y-1.5">
+            {stations.map((s) => (
+              <li key={s.id} className="rounded-lg border border-border p-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{s.station_type_name}</span>
+                  <span
+                    className={`badge ${
+                      s.kind === "shipyard" ? "bg-amber/20 text-amber-dark" : "bg-good/15 text-good"
+                    }`}
+                  >
+                    {s.kind}
+                  </span>
+                </div>
+                {s.kind === "resource" && s.produced_resource && (
+                  <div className="text-xs text-muted mt-0.5">
+                    +{s.production_amount.toLocaleString()} {RESOURCE_LABELS[s.produced_resource]}/turn
+                  </div>
+                )}
+                <div className="text-[11px] text-muted/70 mt-0.5">
+                  {s.built_by_name ? `Built by ${s.built_by_name}` : "Campaign start"} · turn {s.built_on_turn}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted/80 mt-1">No stations in this sector yet.</p>
+        )}
+      </div>
+
+      {/* Placeholder for the system this map is being built to host next. */}
       <div className="mt-4 space-y-3 border-t border-border pt-3">
-        <FutureSection title="Station">
-          No station here — construction arrives in a future update.
-        </FutureSection>
         <FutureSection title="Ships">
           No ships in this sector — movement arrives in a future update.
         </FutureSection>
@@ -478,6 +594,147 @@ function TerrainMapsModal({
         <div className="flex justify-end">
           <button className="btn-primary" onClick={onClose}>
             Done
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function BuildStationModal({
+  tile,
+  onClose,
+  onBuilt,
+}: {
+  tile: HexTile;
+  onClose: () => void;
+  onBuilt: () => void;
+}) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const types = useQuery({ queryKey: ["station-types"], queryFn: api.listStationTypes });
+  const resources = useQuery({ queryKey: ["resources"], queryFn: api.getResources });
+  const [chosen, setChosen] = useState<StationType | null>(null);
+
+  const balances: Partial<Record<ResourceType, number>> = {};
+  for (const b of resources.data?.balances ?? []) balances[b.resource] = b.amount;
+  const canAfford = (t: StationType) =>
+    (Object.keys(RESOURCE_LABELS) as ResourceType[]).every(
+      (r) => (balances[r] ?? 0) >= (t.cost[r] ?? 0),
+    );
+
+  const build = useMutation({
+    mutationFn: () => api.buildStation(tile.id, chosen!.id),
+    onSuccess: (s) => {
+      toast(`Built ${s.station_type_name} in sector (${tile.q}, ${tile.r}).`, "success");
+      qc.invalidateQueries({ queryKey: ["stations"] });
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      onBuilt();
+    },
+    onError: (e: any) => toast(e.message ?? "Could not build the station", "error"),
+  });
+
+  const title = `Build in sector (${tile.q}, ${tile.r})`;
+
+  // Step 2: confirm the chosen type.
+  if (chosen) {
+    const affordable = canAfford(chosen);
+    return (
+      <Modal open onClose={onClose} title={title}>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border p-3">
+            <div className="flex items-center gap-2">
+              <span className="font-bold">{chosen.name}</span>
+              <span
+                className={`badge ${
+                  chosen.kind === "shipyard" ? "bg-amber/20 text-amber-dark" : "bg-good/15 text-good"
+                }`}
+              >
+                {chosen.kind}
+              </span>
+            </div>
+            {chosen.description && (
+              <p className="text-sm text-muted mt-1">{chosen.description}</p>
+            )}
+            <div className="text-sm mt-2">
+              <span className="text-muted">Cost:</span> {costSummary(chosen.cost)}
+            </div>
+            {chosen.kind === "resource" && chosen.produced_resource && (
+              <div className="text-sm">
+                <span className="text-muted">Generates:</span>{" "}
+                {chosen.production_amount.toLocaleString()} {RESOURCE_LABELS[chosen.produced_resource]}/turn
+              </div>
+            )}
+          </div>
+          {!affordable && (
+            <div className="text-sm text-bad">
+              The campaign can’t afford this station right now.
+            </div>
+          )}
+          <div className="flex justify-between gap-2">
+            <button className="btn-ghost" onClick={() => setChosen(null)}>
+              ← Back
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!affordable || build.isPending}
+              onClick={() => build.mutate()}
+            >
+              {build.isPending ? "Building…" : "Confirm & build"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Step 1: pick a station type.
+  return (
+    <Modal open onClose={onClose} title={title}>
+      <div className="space-y-3">
+        <p className="text-sm text-muted">Choose a station type to construct here.</p>
+        {types.isLoading ? (
+          <Spinner label="Loading station types…" />
+        ) : !types.data?.length ? (
+          <EmptyState
+            title="No station types"
+            hint="An admin must create station types first."
+          />
+        ) : (
+          <div className="space-y-2">
+            {types.data.map((t) => {
+              const affordable = canAfford(t);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setChosen(t)}
+                  className="w-full text-left rounded-xl border border-border p-3 hover:border-amber transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{t.name}</span>
+                    <span
+                      className={`badge ${
+                        t.kind === "shipyard" ? "bg-amber/20 text-amber-dark" : "bg-good/15 text-good"
+                      }`}
+                    >
+                      {t.kind}
+                    </span>
+                    {!affordable && <span className="badge bg-bad/15 text-bad">can’t afford</span>}
+                  </div>
+                  <div className="text-xs text-muted mt-1">Cost: {costSummary(t.cost)}</div>
+                  {t.kind === "resource" && t.produced_resource && (
+                    <div className="text-xs text-muted">
+                      +{t.production_amount.toLocaleString()} {RESOURCE_LABELS[t.produced_resource]}/turn
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <button className="btn-ghost" onClick={onClose}>
+            Cancel
           </button>
         </div>
       </div>

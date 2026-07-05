@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.models.world import GameMap, StartSlot, StartSlotClass
+from app.models.station import StationSlot
 from app.models.user import User
 from app.schemas.world import MapOut, MapUpdate, StartSlotIn
+from app.schemas.station import StationSlotIn
 from app.services.seformat.gps import parse_gps
 from app.services.storage import get_storage
 
@@ -38,6 +40,18 @@ def _serialize_map(m: GameMap) -> dict:
             }
             for s in m.start_slots
         ],
+        "station_slots": [
+            {
+                "id": s.id,
+                "map_id": s.map_id,
+                "name": s.name,
+                "position_index": s.position_index,
+                "gps_x": s.gps_x,
+                "gps_y": s.gps_y,
+                "gps_z": s.gps_z,
+            }
+            for s in m.station_slots
+        ],
     }
 
 
@@ -45,7 +59,8 @@ def _load(db: Session, map_id: uuid.UUID) -> GameMap:
     m = db.execute(
         select(GameMap)
         .options(
-            selectinload(GameMap.start_slots).selectinload(StartSlot.supported_classes)
+            selectinload(GameMap.start_slots).selectinload(StartSlot.supported_classes),
+            selectinload(GameMap.station_slots),
         )
         .where(GameMap.id == map_id)
     ).scalar_one_or_none()
@@ -61,7 +76,7 @@ def _resolve_coords(slot_in: StartSlotIn) -> tuple[float, float, float]:
     if slot_in.gps_x is None or slot_in.gps_y is None or slot_in.gps_z is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"Start slot '{slot_in.name}' needs a GPS string or explicit X/Y/Z",
+            f"Slot '{slot_in.name}' needs a GPS string or explicit X/Y/Z",
         )
     return slot_in.gps_x, slot_in.gps_y, slot_in.gps_z
 
@@ -74,7 +89,8 @@ def list_maps(db: Session = Depends(get_db), _: User = Depends(get_current_user)
             .options(
                 selectinload(GameMap.start_slots).selectinload(
                     StartSlot.supported_classes
-                )
+                ),
+                selectinload(GameMap.station_slots),
             )
             .order_by(GameMap.created_at.desc())
         )
@@ -135,6 +151,22 @@ def update_map(
             for cid in slot_in.ship_class_ids:
                 slot.supported_classes.append(StartSlotClass(ship_class_id=cid))
             m.start_slots.append(slot)
+    if payload.station_slots is not None:
+        # Replace the full station-slot set (mirrors start slots).
+        m.station_slots.clear()
+        db.flush()
+        for idx, slot_in in enumerate(payload.station_slots):
+            x, y, z = _resolve_coords(slot_in)
+            m.station_slots.append(
+                StationSlot(
+                    map_id=m.id,
+                    name=slot_in.name,
+                    position_index=slot_in.position_index or idx,
+                    gps_x=x,
+                    gps_y=y,
+                    gps_z=z,
+                )
+            )
     db.commit()
     return _serialize_map(_load(db, map_id))
 

@@ -33,6 +33,7 @@ from app.services.hexmap import (
     get_terrain_maps,
     set_terrain_map,
 )
+from app.services.stations import ensure_starter_station
 
 router = APIRouter(prefix="/api/hex-map", tags=["hex-map"])
 
@@ -77,6 +78,9 @@ def regenerate(
         m.name = payload.name
     generate_tiles(db, payload.radius)
     db.commit()
+    # Regenerating replaces every tile (cascading away built stations), so
+    # restore the campaign's free starter shipyard on the new origin sector.
+    ensure_starter_station(db)
     return _map_out(db, get_map(db))
 
 

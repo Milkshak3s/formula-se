@@ -33,6 +33,7 @@ export default function MapsPage() {
   const classes = useQuery({ queryKey: ["ship-classes"], queryFn: api.listShipClasses });
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState<GameMap | null>(null);
+  const [stationEditing, setStationEditing] = useState<GameMap | null>(null);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["maps"] });
   const del = useMutation({ mutationFn: api.deleteMap, onSuccess: invalidate });
@@ -72,6 +73,12 @@ export default function MapsPage() {
                       Edit start slots
                     </button>
                     <button
+                      className="text-xs text-muted hover:text-ink"
+                      onClick={() => setStationEditing(m)}
+                    >
+                      Edit station slots
+                    </button>
+                    <button
                       className="text-xs text-bad"
                       onClick={() => confirm(`Delete ${m.name}?`) && del.mutate(m.id)}
                     >
@@ -101,6 +108,21 @@ export default function MapsPage() {
                     </div>
                   ))}
                 </div>
+                <div className="text-sm font-medium mt-4 mb-2">
+                  {m.station_slots.length} station slot{m.station_slots.length === 1 ? "" : "s"}
+                </div>
+                {m.station_slots.length > 0 && (
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {m.station_slots.map((s) => (
+                      <div key={s.id} className="rounded-xl border border-border p-3">
+                        <div className="font-medium text-sm">{s.name}</div>
+                        <div className="text-xs text-muted mt-0.5">
+                          ({s.gps_x.toFixed(0)}, {s.gps_y.toFixed(0)}, {s.gps_z.toFixed(0)})
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
           ))}
@@ -127,7 +149,131 @@ export default function MapsPage() {
           }}
         />
       )}
+      {stationEditing && (
+        <StationSlotEditor
+          map={stationEditing}
+          onClose={() => setStationEditing(null)}
+          onSaved={() => {
+            invalidate();
+            setStationEditing(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+interface DraftStationSlot {
+  name: string;
+  gps_string: string;
+  gps_x: number;
+  gps_y: number;
+  gps_z: number;
+}
+
+function StationSlotEditor({
+  map,
+  onClose,
+  onSaved,
+}: {
+  map: GameMap;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [slots, setSlots] = useState<DraftStationSlot[]>(
+    map.station_slots.map((s) => ({
+      name: s.name,
+      gps_string: "",
+      gps_x: s.gps_x,
+      gps_y: s.gps_y,
+      gps_z: s.gps_z,
+    })),
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const addSlot = () =>
+    setSlots([
+      ...slots,
+      { name: `Station ${slots.length + 1}`, gps_string: "", gps_x: 0, gps_y: 0, gps_z: 0 },
+    ]);
+  const update = (i: number, patch: Partial<DraftStationSlot>) =>
+    setSlots(slots.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const remove = (i: number) => setSlots(slots.filter((_, idx) => idx !== i));
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.updateMap(map.id, {
+        station_slots: slots.map((s, i) => ({
+          name: s.name,
+          position_index: i,
+          gps_string: s.gps_string || null,
+          gps_x: s.gps_string ? null : s.gps_x,
+          gps_y: s.gps_string ? null : s.gps_y,
+          gps_z: s.gps_string ? null : s.gps_z,
+        })),
+      }),
+    onSuccess: onSaved,
+    onError: (e: any) => setError(e.message),
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`Station slots — ${map.name}`}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          Positions where station grids are injected before this map loads on a server.
+        </p>
+        {slots.map((s, i) => (
+          <div key={i} className="rounded-xl border border-border p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <input
+                className="input max-w-[60%]"
+                value={s.name}
+                onChange={(e) => update(i, { name: e.target.value })}
+              />
+              <button className="text-xs text-bad" onClick={() => remove(i)}>
+                Remove
+              </button>
+            </div>
+            <div>
+              <label className="label">Paste GPS (optional — overrides X/Y/Z)</label>
+              <input
+                className="input"
+                placeholder="GPS:Dock:1024:0:2048:#FF7500:"
+                value={s.gps_string}
+                onChange={(e) => update(i, { gps_string: e.target.value })}
+              />
+            </div>
+            {!s.gps_string && (
+              <div className="grid grid-cols-3 gap-2">
+                {(["gps_x", "gps_y", "gps_z"] as const).map((axis) => (
+                  <div key={axis}>
+                    <label className="label">{axis.slice(-1).toUpperCase()}</label>
+                    <input
+                      className="input"
+                      type="number"
+                      value={s[axis]}
+                      onChange={(e) => update(i, { [axis]: Number(e.target.value) } as any)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        <button className="btn-ghost w-full" onClick={addSlot}>
+          + Add station slot
+        </button>
+        {error && <div className="text-sm text-bad">{error}</div>}
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-primary" disabled={save.isPending} onClick={() => save.mutate()}>
+            Save station slots
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
