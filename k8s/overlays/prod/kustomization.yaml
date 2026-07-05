@@ -12,7 +12,7 @@ images:
     newTag: "0.1.8"
   - name: ghcr.io/milkshak3s/formula-se-web
     newName: docker.io/gobworks/formula-se-web
-    newTag: "0.1.7"
+    newTag: "0.1.8"
 
 patches:
   # Point the ingress at the real host + TLS secret.
