@@ -58,3 +58,19 @@ class PreparedWorldStatus(str, enum.Enum):
     ready = "ready"
     failed = "failed"
     expired = "expired"
+
+
+class HexTerrain(str, enum.Enum):
+    """Flavour/terrain of a sector-map hex.
+
+    Cosmetic today; the natural anchor for future gameplay (resource yields,
+    where stations may be built, movement cost). ``deep_space`` is the empty
+    default; ``star_system`` marks the campaign's home sector at the origin.
+    """
+
+    deep_space = "deep_space"
+    asteroid_field = "asteroid_field"
+    nebula = "nebula"
+    ice_field = "ice_field"
+    planet = "planet"
+    star_system = "star_system"

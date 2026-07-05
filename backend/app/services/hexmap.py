@@ -1,0 +1,138 @@
+"""Sector-map logic: axial-hex geometry and grid generation.
+
+The geometry helpers (:func:`hex_distance`, :func:`neighbors`,
+:func:`tiles_in_radius`) are pure and DB-free — they are the foundation the
+future ship-movement and station-adjacency features build on, and are unit
+tested in isolation. :func:`get_map` / :func:`generate_tiles` own the singleton
+map row and its hex set.
+"""
+from __future__ import annotations
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.models.enums import HexTerrain
+from app.models.hexmap import (
+    DEFAULT_RADIUS,
+    MAX_RADIUS,
+    MIN_RADIUS,
+    SINGLETON_ID,
+    HexMap,
+    HexTile,
+)
+
+# The six axial neighbour directions (pointy-top), in clockwise order from East.
+AXIAL_DIRECTIONS: tuple[tuple[int, int], ...] = (
+    (1, 0),
+    (1, -1),
+    (0, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, 1),
+)
+
+
+def hex_distance(aq: int, ar: int, bq: int, br: int) -> int:
+    """Number of steps between two axial hexes (the future ship-move cost)."""
+    return (abs(aq - bq) + abs(ar - br) + abs((aq + ar) - (bq + br))) // 2
+
+
+def neighbors(q: int, r: int) -> list[tuple[int, int]]:
+    """The six axial coordinates adjacent to ``(q, r)`` (unbounded by the map)."""
+    return [(q + dq, r + dr) for dq, dr in AXIAL_DIRECTIONS]
+
+
+def tiles_in_radius(radius: int) -> list[tuple[int, int]]:
+    """Axial coords of every hex within a hexagon of the given radius.
+
+    Radius 0 is the single centre hex; radius N adds N rings around it, for
+    ``3 * N * (N + 1) + 1`` tiles total. Ordered by (q, r) for stable output.
+    """
+    coords: list[tuple[int, int]] = []
+    for q in range(-radius, radius + 1):
+        for r in range(-radius, radius + 1):
+            # Hexagon (not rhombus) shape: the third cube axis must also fit.
+            if abs(q + r) <= radius:
+                coords.append((q, r))
+    return coords
+
+
+def clamp_radius(radius: int) -> int:
+    """Coerce a requested radius into the supported range."""
+    return max(MIN_RADIUS, min(MAX_RADIUS, radius))
+
+
+def terrain_for(q: int, r: int) -> HexTerrain:
+    """Deterministically pick a hex's terrain from its coordinates.
+
+    Deterministic (no RNG) so the generated map is reproducible and testable.
+    The origin is always the home ``star_system``; everything else is a weighted
+    spread biased heavily toward empty ``deep_space``.
+    """
+    if q == 0 and r == 0:
+        return HexTerrain.star_system
+    # Cheap, well-mixed hash of the coordinate pair.
+    h = (q * 73856093) ^ (r * 19349663) ^ ((q + r) * 83492791)
+    bucket = h % 100
+    if bucket < 58:
+        return HexTerrain.deep_space
+    if bucket < 73:
+        return HexTerrain.asteroid_field
+    if bucket < 84:
+        return HexTerrain.nebula
+    if bucket < 92:
+        return HexTerrain.ice_field
+    if bucket < 98:
+        return HexTerrain.planet
+    return HexTerrain.star_system
+
+
+def get_map(db: Session) -> HexMap:
+    """Return the singleton sector map, creating it (at DEFAULT_RADIUS) if absent."""
+    m = db.get(HexMap, SINGLETON_ID)
+    if m is None:
+        m = HexMap(id=SINGLETON_ID, radius=DEFAULT_RADIUS)
+        db.add(m)
+        try:
+            db.commit()
+        except IntegrityError:
+            # Another worker/replica created it first — reuse that row.
+            db.rollback()
+            m = db.get(HexMap, SINGLETON_ID)
+        else:
+            db.refresh(m)
+    return m
+
+
+def generate_tiles(db: Session, radius: int) -> int:
+    """Rebuild the hex set for the given radius and persist the new radius.
+
+    Replaces every existing tile (a full regenerate). Safe to call repeatedly;
+    returns the number of tiles created. Callers commit.
+    """
+    radius = clamp_radius(radius)
+    m = get_map(db)
+    m.radius = radius
+    db.execute(delete(HexTile))
+    db.flush()
+    coords = tiles_in_radius(radius)
+    db.add_all(
+        HexTile(q=q, r=r, terrain=terrain_for(q, r)) for q, r in coords
+    )
+    return len(coords)
+
+
+def ensure_tiles(db: Session) -> int:
+    """Generate the default grid on first boot if the map has no tiles yet.
+
+    Idempotent — a no-op once tiles exist, so it is safe in ``run_seeds`` which
+    runs on every startup. Returns the number of tiles created (0 if present).
+    """
+    m = get_map(db)
+    count = db.execute(select(func.count()).select_from(HexTile)).scalar_one()
+    if count:
+        return 0
+    created = generate_tiles(db, m.radius)
+    db.commit()
+    return created

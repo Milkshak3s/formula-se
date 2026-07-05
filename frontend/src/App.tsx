@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ShipClassesPage from "./pages/ShipClassesPage";
 import SlotsPage from "./pages/SlotsPage";
 import MapsPage from "./pages/MapsPage";
+import HexMapPage from "./pages/HexMapPage";
 import StartWorldPage from "./pages/StartWorldPage";
 import PreparedWorldsPage from "./pages/PreparedWorldsPage";
 import AdminPage from "./pages/AdminPage";
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/ship-classes" element={<Protected><ShipClassesPage /></Protected>} />
       <Route path="/slots" element={<Protected><SlotsPage /></Protected>} />
       <Route path="/maps" element={<Protected><MapsPage /></Protected>} />
+      <Route path="/sector-map" element={<Protected><HexMapPage /></Protected>} />
       <Route
         path="/start-world"
         element={<Protected role="commander"><StartWorldPage /></Protected>}

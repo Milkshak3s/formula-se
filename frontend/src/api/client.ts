@@ -5,6 +5,9 @@ import type {
   BlueprintHistory,
   GameMap,
   GameServer,
+  HexMap,
+  HexTerrain,
+  HexTile,
   PreparedWorld,
   Requirement,
   ServerCreated,
@@ -154,6 +157,16 @@ export const api = {
   // --- turns ---
   getTurnState: () => request<TurnState>("/api/turns"),
   advanceTurn: () => request<TurnState>("/api/turns/advance", { method: "POST" }),
+
+  // --- sector (hex) map ---
+  getHexMap: () => request<HexMap>("/api/hex-map"),
+  regenerateHexMap: (radius: number, name?: string) =>
+    request<HexMap>("/api/hex-map/regenerate", {
+      method: "POST",
+      ...json({ radius, name }),
+    }),
+  updateHexTile: (id: string, data: { terrain?: HexTerrain; name?: string }) =>
+    request<HexTile>(`/api/hex-map/tiles/${id}`, { method: "PATCH", ...json(data) }),
 
   // --- settings ---
   getSettings: () => request<AppSettings>("/api/settings"),

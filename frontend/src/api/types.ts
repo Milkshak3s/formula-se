@@ -145,6 +145,29 @@ export interface TurnState {
   history: TurnEvent[];
 }
 
+export type HexTerrain =
+  | "deep_space"
+  | "asteroid_field"
+  | "nebula"
+  | "ice_field"
+  | "planet"
+  | "star_system";
+
+export interface HexTile {
+  id: string;
+  q: number;
+  r: number;
+  terrain: HexTerrain;
+  name: string;
+}
+
+export interface HexMap {
+  id: number;
+  name: string;
+  radius: number;
+  tiles: HexTile[];
+}
+
 export type ServerReportedState =
   | "offline"
   | "idle"
