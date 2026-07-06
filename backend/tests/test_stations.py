@@ -106,6 +106,18 @@ def test_resource_station_type_requires_production():
     assert mine.production_amount == 250
 
 
+def test_shipyard_build_slots_default_and_validation():
+    # Defaults to a single build slot.
+    yard = StationTypeCreate(name="Yard", kind=StationKind.shipyard)
+    assert yard.build_slots == 1
+    # A shipyard may declare more concurrent slots.
+    big = StationTypeCreate(name="Big Yard", kind=StationKind.shipyard, build_slots=4)
+    assert big.build_slots == 4
+    # Zero/negative slots are rejected at the schema layer.
+    with pytest.raises(ValueError):
+        StationTypeCreate(name="No Slots", kind=StationKind.shipyard, build_slots=0)
+
+
 def test_station_type_create_rejects_negative_cost():
     with pytest.raises(ValueError):
         StationTypeCreate(

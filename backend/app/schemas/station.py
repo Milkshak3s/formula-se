@@ -39,6 +39,8 @@ class StationTypeCreate(BaseModel):
     cost: dict[ResourceType, int] = Field(default_factory=dict)
     produced_resource: ResourceType | None = None
     production_amount: int = Field(default=0, ge=0)
+    # Concurrent build slots for shipyards; ignored for resource stations.
+    build_slots: int = Field(default=1, ge=1)
 
     @field_validator("cost")
     @classmethod
@@ -64,6 +66,7 @@ class StationTypeUpdate(BaseModel):
     cost: dict[ResourceType, int] | None = None
     produced_resource: ResourceType | None = None
     production_amount: int | None = Field(default=None, ge=0)
+    build_slots: int | None = Field(default=None, ge=1)
 
 
 class StationTypeOut(BaseModel):
@@ -75,6 +78,7 @@ class StationTypeOut(BaseModel):
     cost: dict[ResourceType, int] = Field(default_factory=dict)
     produced_resource: ResourceType | None = None
     production_amount: int
+    build_slots: int
     has_blueprint: bool = False
     stats: dict = Field(default_factory=dict)
     is_starter: bool

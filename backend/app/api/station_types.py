@@ -63,6 +63,9 @@ def create_station_type(
         production_amount=(
             payload.production_amount if payload.kind == StationKind.resource else 0
         ),
+        build_slots=(
+            payload.build_slots if payload.kind == StationKind.shipyard else 1
+        ),
         created_by=admin.id,
     )
     db.add(st)
@@ -92,6 +95,8 @@ def update_station_type(
             st.produced_resource = payload.produced_resource
         if payload.production_amount is not None:
             st.production_amount = payload.production_amount
+    if st.kind == StationKind.shipyard and payload.build_slots is not None:
+        st.build_slots = payload.build_slots
     db.commit()
     db.refresh(st)
     return _out(st)

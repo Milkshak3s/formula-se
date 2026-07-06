@@ -107,6 +107,7 @@ export interface StationType {
   cost: Partial<Record<ResourceType, number>>;
   produced_resource: ResourceType | null;
   production_amount: number;
+  build_slots: number;
   has_blueprint: boolean;
   stats: Record<string, any>;
   is_starter: boolean;

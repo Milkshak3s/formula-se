@@ -75,6 +75,8 @@ class StationType(UUIDPk, Timestamped, Base):
         Enum(ResourceType, name="resource_type", native_enum=False), nullable=True
     )
     production_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Concurrent ships a shipyard can build at once (shipyards only; 1 otherwise).
+    build_slots: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Optional blueprint for the station grid (parsed/stored like ship blueprints).
     b2_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     thumb_b2_key: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -90,6 +90,11 @@ export default function StationTypesPage() {
                     {t.production_amount.toLocaleString()} {RESOURCE_LABELS[t.produced_resource]}/turn
                   </div>
                 )}
+                {t.kind === "shipyard" && (
+                  <div>
+                    <span className="text-muted">Build slots:</span> {t.build_slots.toLocaleString()}
+                  </div>
+                )}
                 <div className="text-xs text-muted">
                   {t.has_blueprint ? `Blueprint: ${t.stats?.block_count ?? "?"} blocks` : "No blueprint"}
                 </div>
@@ -162,6 +167,7 @@ function TypeModal({
     type?.produced_resource ?? "iron_ingot",
   );
   const [productionAmount, setProductionAmount] = useState<number>(type?.production_amount ?? 100);
+  const [buildSlots, setBuildSlots] = useState<number>(type?.build_slots ?? 1);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -175,6 +181,7 @@ function TypeModal({
         cost: cleanCost,
         produced_resource: kind === "resource" ? producedResource : null,
         production_amount: kind === "resource" ? productionAmount : 0,
+        build_slots: kind === "shipyard" ? buildSlots : 1,
       };
       return type ? api.updateStationType(type.id, payload) : api.createStationType(payload);
     },
@@ -254,6 +261,19 @@ function TypeModal({
                 onChange={(e) => setProductionAmount(Number(e.target.value))}
               />
             </div>
+          </div>
+        )}
+        {kind === "shipyard" && (
+          <div>
+            <label className="label">Build slots</label>
+            <input
+              className="input"
+              type="number"
+              min={1}
+              value={buildSlots}
+              onChange={(e) => setBuildSlots(Number(e.target.value))}
+            />
+            <p className="text-xs text-muted mt-1">Ships this shipyard can build at once.</p>
           </div>
         )}
         {error && <div className="text-sm text-bad">{error}</div>}

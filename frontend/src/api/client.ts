@@ -170,6 +170,7 @@ export const api = {
     cost: Record<string, number>;
     produced_resource: string | null;
     production_amount: number;
+    build_slots: number;
   }) => request<StationType>("/api/station-types", { method: "POST", ...json(data) }),
   updateStationType: (id: string, data: any) =>
     request<StationType>(`/api/station-types/${id}`, { method: "PATCH", ...json(data) }),
