@@ -142,6 +142,27 @@ def _remap_entity_ids(
                 el.text = id_map[el.text.strip()]
 
 
+def _force_create_physics(grid_el: etree._Element) -> None:
+    """Ensure an injected grid gets a physics body when the world loads.
+
+    Blueprints of *stations* serialize the grid in a template/preview state with
+    ``<CreatePhysics>false</CreatePhysics>`` (alongside ``IsStatic`` /
+    ``IsUnsupportedStation`` = true). Injected verbatim into a world, SE loads
+    such a grid as a non-physical "hologram": it renders but has no collision
+    (you clip straight through it) and never registers as a real grid. Ships omit
+    the field entirely — SE then defaults physics on — which is why ship
+    injection was unaffected. Force the flag true so the grid is solid and shows
+    up as a real grid; leave the static/unsupported flags alone so a station
+    stays a fixed structure floating in space.
+    """
+    for child in grid_el:
+        if _localname(child.tag) == "CreatePhysics":
+            child.text = "true"
+            return
+    # No CreatePhysics element (e.g. ship grids) → SE already defaults it to
+    # true, so there's nothing to correct.
+
+
 def _blueprint_grid_elements(grids_xml: bytes) -> list[etree._Element]:
     parser = etree.XMLParser(recover=True, huge_tree=True, resolve_entities=False)
     root = etree.fromstring(grids_xml, parser=parser)
@@ -213,6 +234,9 @@ def inject_into_sector(
         # references (subgrid links) are rewritten consistently.
         _remap_entity_ids(grids, alloc)
         for grid in grids:
+            # Blueprint grids (esp. stations) may be saved with physics disabled;
+            # a world grid must create physics or it loads as a collisionless ghost.
+            _force_create_physics(grid)
             sector_objects.append(_to_sector_entity(grid))
 
     return etree.tostring(root, xml_declaration=True, encoding="utf-8")

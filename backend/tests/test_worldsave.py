@@ -79,6 +79,51 @@ def test_entity_ids_reassigned():
     assert "<EntityId>42</EntityId>" not in result
 
 
+def test_injected_grid_forces_create_physics():
+    # Station blueprints serialize with physics disabled + IsStatic; injected
+    # verbatim SE loads them as collisionless ghosts. Injection must flip
+    # CreatePhysics true so the grid is solid, while leaving IsStatic alone.
+    station_grid = (
+        b'<CubeGrids><CubeGrid>'
+        b"<EntityId>7</EntityId>"
+        b"<GridSizeEnum>Large</GridSizeEnum>"
+        b"<PositionAndOrientation><Position x=\"0\" y=\"0\" z=\"0\"/></PositionAndOrientation>"
+        b"<CubeBlocks/>"
+        b"<IsStatic>true</IsStatic>"
+        b"<CreatePhysics>false</CreatePhysics>"
+        b"</CubeGrid></CubeGrids>"
+    )
+    with zipfile.ZipFile(io.BytesIO(make_world_zip())) as zf:
+        sbs = zf.read("MyWorld/SANDBOX_0_0_0_.sbs")
+    result = inject_into_sector(
+        sbs, [GridPlacement(grids_xml=station_grid, x=100.0, y=0.0, z=0.0)]
+    )
+    root = etree.fromstring(result)
+    XSI = "{http://www.w3.org/2001/XMLSchema-instance}type"
+    grid = next(
+        e
+        for e in root.iter()
+        if _localname(e.tag) == "MyObjectBuilder_EntityBase"
+        and e.get(XSI) == "MyObjectBuilder_CubeGrid"
+    )
+    physics = [c.text for c in grid if _localname(c.tag) == "CreatePhysics"]
+    is_static = [c.text for c in grid if _localname(c.tag) == "IsStatic"]
+    assert physics == ["true"], "CreatePhysics must be forced true"
+    assert is_static == ["true"], "IsStatic must be preserved (station stays fixed)"
+
+
+def test_ship_grid_without_create_physics_untouched():
+    # Ship blueprints omit CreatePhysics (SE defaults it true); injection must
+    # not spuriously add the element.
+    grids = extract_grids_xml(make_blueprint_xml(position=(0, 0, 0)))
+    with zipfile.ZipFile(io.BytesIO(make_world_zip())) as zf:
+        sbs = zf.read("MyWorld/SANDBOX_0_0_0_.sbs")
+    result = inject_into_sector(
+        sbs, [GridPlacement(grids_xml=grids, x=0, y=0, z=0)]
+    ).decode()
+    assert "CreatePhysics" not in result
+
+
 def test_multigrid_subgrid_references_remapped():
     """A subgrid link (base.TopBlockId -> top part EntityId on another grid)
     must survive EntityId reassignment, or the ship spawns disassembled."""
