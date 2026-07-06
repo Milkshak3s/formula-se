@@ -11,6 +11,7 @@ import type {
   PreparedWorld,
   Requirement,
   ResourceState,
+  ResourceType,
   ServerCreated,
   ShipClass,
   Slot,
@@ -81,6 +82,8 @@ export const api = {
   createShipClass: (data: {
     name: string;
     description: string;
+    cost: Partial<Record<ResourceType, number>>;
+    build_time: number;
     requirements: Requirement[];
   }) => request<ShipClass>("/api/ship-classes", { method: "POST", ...json(data) }),
   updateShipClass: (id: string, data: Partial<ShipClass>) =>

@@ -54,6 +54,8 @@ def create_class(
     obj = ShipClass(
         name=payload.name,
         description=payload.description,
+        cost={r.value: a for r, a in payload.cost.items() if a > 0},
+        build_time=payload.build_time,
         created_by=admin.id,
     )
     for req in payload.requirements:
@@ -77,6 +79,10 @@ def update_class(
         obj.name = payload.name
     if payload.description is not None:
         obj.description = payload.description
+    if payload.cost is not None:
+        obj.cost = {r.value: a for r, a in payload.cost.items() if a > 0}
+    if payload.build_time is not None:
+        obj.build_time = payload.build_time
     if payload.requirements is not None:
         # Replace the whole requirement set.
         obj.requirements.clear()

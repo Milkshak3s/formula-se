@@ -4,9 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import BlueprintStatus, RequirementType
+from app.models.enums import BlueprintStatus, RequirementType, ResourceType
 
 
 class RequirementIn(BaseModel):
@@ -19,16 +19,35 @@ class RequirementOut(RequirementIn):
     id: uuid.UUID
 
 
+def _non_negative_cost(v: dict[ResourceType, int]) -> dict[ResourceType, int]:
+    if any(amount < 0 for amount in v.values()):
+        raise ValueError("Cost amounts must be non-negative")
+    return v
+
+
 class ShipClassCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = ""
+    # {resource: amount}; only positive amounts are meaningful.
+    cost: dict[ResourceType, int] = Field(default_factory=dict)
+    # Turns to build one ship of this class.
+    build_time: int = Field(default=1, ge=1)
     requirements: list[RequirementIn] = Field(default_factory=list)
+
+    _validate_cost = field_validator("cost")(_non_negative_cost)
 
 
 class ShipClassUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=120)
     description: str | None = None
+    cost: dict[ResourceType, int] | None = None
+    build_time: int | None = Field(default=None, ge=1)
     requirements: list[RequirementIn] | None = None
+
+    @field_validator("cost")
+    @classmethod
+    def _check_cost(cls, v: dict[ResourceType, int] | None) -> dict[ResourceType, int] | None:
+        return v if v is None else _non_negative_cost(v)
 
 
 class ShipClassOut(BaseModel):
@@ -36,6 +55,8 @@ class ShipClassOut(BaseModel):
     id: uuid.UUID
     name: str
     description: str
+    cost: dict[ResourceType, int] = Field(default_factory=dict)
+    build_time: int
     created_at: datetime
     requirements: list[RequirementOut] = Field(default_factory=list)
 

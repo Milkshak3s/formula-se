@@ -3,7 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../auth";
 import { Badge, Card, EmptyState, Modal, PageHeader, Spinner } from "../components/ui";
-import type { Requirement, RequirementType, ShipClass } from "../api/types";
+import { RESOURCE_LABELS, costSummary } from "./StationTypesPage";
+import type { Requirement, RequirementType, ResourceType, ShipClass } from "../api/types";
+
+const RESOURCES = Object.keys(RESOURCE_LABELS) as ResourceType[];
 
 const RULE_LABELS: Record<RequirementType, string> = {
   block_count: "Block count",
@@ -220,6 +223,15 @@ export default function ShipClassesPage() {
                   </div>
                 )}
               </div>
+              <div className="mt-3 text-sm space-y-1">
+                <div>
+                  <span className="text-muted">Cost:</span> {costSummary(c.cost)}
+                </div>
+                <div>
+                  <span className="text-muted">Build time:</span>{" "}
+                  {c.build_time.toLocaleString()} {c.build_time === 1 ? "turn" : "turns"}
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 {c.requirements.length ? (
                   c.requirements.map((r, i) => (
@@ -263,12 +275,22 @@ function ClassModal({
 }) {
   const [name, setName] = useState(klass?.name ?? "");
   const [description, setDescription] = useState(klass?.description ?? "");
+  const [cost, setCost] = useState<Partial<Record<ResourceType, number>>>(klass?.cost ?? {});
+  const [buildTime, setBuildTime] = useState<number>(klass?.build_time ?? 1);
   const [rules, setRules] = useState<Requirement[]>(klass?.requirements ?? []);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { name, description, requirements: rules };
+      const cleanCost: Record<string, number> = {};
+      for (const r of RESOURCES) if ((cost[r] ?? 0) > 0) cleanCost[r] = cost[r]!;
+      const payload = {
+        name,
+        description,
+        cost: cleanCost,
+        build_time: buildTime,
+        requirements: rules,
+      };
       if (klass) return api.updateShipClass(klass.id, payload);
       return api.createShipClass(payload);
     },
@@ -291,6 +313,34 @@ function ClassModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+        </div>
+        <div>
+          <label className="label">Build cost</label>
+          <div className="grid grid-cols-2 gap-2">
+            {RESOURCES.map((r) => (
+              <div key={r}>
+                <label className="text-xs text-muted">{RESOURCE_LABELS[r]}</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  value={cost[r] ?? 0}
+                  onChange={(e) => setCost({ ...cost, [r]: Number(e.target.value) })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="label">Build time</label>
+          <input
+            className="input"
+            type="number"
+            min={1}
+            value={buildTime}
+            onChange={(e) => setBuildTime(Number(e.target.value))}
+          />
+          <p className="text-xs text-muted mt-1">Turns a shipyard needs to build one ship.</p>
         </div>
         <div>
           <label className="label">Requirements</label>

@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import Enum, ForeignKey, Index, String, Text, text
+from sqlalchemy import Enum, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +18,11 @@ class ShipClass(UUIDPk, Timestamped, Base):
 
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # Admin-configurable build cost as {resource_value: amount}; only positive
+    # entries are stored (mirrors StationType.cost).
+    cost: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    # Turns a shipyard needs to build one ship of this class.
+    build_time: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

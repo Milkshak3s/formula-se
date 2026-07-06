@@ -33,6 +33,8 @@ export interface ShipClass {
   id: string;
   name: string;
   description: string;
+  cost: Partial<Record<ResourceType, number>>;
+  build_time: number;
   created_at: string;
   requirements: Requirement[];
 }
