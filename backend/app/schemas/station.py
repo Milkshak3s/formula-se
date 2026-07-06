@@ -101,6 +101,8 @@ class StationOut(BaseModel):
     kind: StationKind
     produced_resource: ResourceType | None = None
     production_amount: int
+    # Concurrent build slots (shipyards); lets the UI show slot usage.
+    build_slots: int
     built_by: uuid.UUID | None = None
     built_by_name: str | None = None
     built_on_turn: int

@@ -66,7 +66,11 @@ def run_turn_hooks(db: Session, state: GameState) -> None:
 
     Wired systems:
       * resource generation — each resource station credits the treasury.
+      * ship construction — every in-progress build advances a turn; finished
+        ones complete into shared ship stock at their shipyard's sector.
     """
+    from app.services.ships import progress_ship_builds
     from app.services.stations import generate_turn_resources
 
     generate_turn_resources(db)
+    progress_ship_builds(db)

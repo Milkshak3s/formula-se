@@ -10,6 +10,8 @@ import type {
   HexTerrain,
   HexTile,
   ResourceType,
+  Ship,
+  ShipBuildOrder,
   Station,
   StationType,
   TerrainMap,
@@ -81,10 +83,13 @@ export default function HexMapPage() {
   const isCommander = hasRole("commander");
   const map = useQuery({ queryKey: ["hex-map"], queryFn: api.getHexMap });
   const stations = useQuery({ queryKey: ["stations"], queryFn: api.listStations });
+  const ships = useQuery({ queryKey: ["ships"], queryFn: api.listShips });
+  const builds = useQuery({ queryKey: ["ship-builds"], queryFn: api.listShipBuilds });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [regenOpen, setRegenOpen] = useState(false);
   const [terrainMapsOpen, setTerrainMapsOpen] = useState(false);
   const [buildTile, setBuildTile] = useState<HexTile | null>(null);
+  const [buildShipyard, setBuildShipyard] = useState<Station | null>(null);
 
   const selected = map.data?.tiles.find((t) => t.id === selectedId) ?? null;
   const mapByTerrain = useMemo(() => {
@@ -97,6 +102,16 @@ export default function HexMapPage() {
     for (const s of stations.data ?? []) (m[s.hex_tile_id] ??= []).push(s);
     return m;
   }, [stations.data]);
+  const shipsByTile = useMemo(() => {
+    const m: Record<string, Ship[]> = {};
+    for (const s of ships.data ?? []) (m[s.hex_tile_id] ??= []).push(s);
+    return m;
+  }, [ships.data]);
+  const buildsByShipyard = useMemo(() => {
+    const m: Record<string, ShipBuildOrder[]> = {};
+    for (const b of builds.data ?? []) (m[b.shipyard_id] ??= []).push(b);
+    return m;
+  }, [builds.data]);
 
   return (
     <div>
@@ -136,9 +151,12 @@ export default function HexMapPage() {
             tile={selected}
             terrainMap={selected ? mapByTerrain[selected.terrain] ?? null : null}
             stations={selected ? stationsByTile[selected.id] ?? [] : []}
+            ships={selected ? shipsByTile[selected.id] ?? [] : []}
+            buildsByShipyard={buildsByShipyard}
             isAdmin={isAdmin}
             isCommander={isCommander}
             onBuild={() => selected && setBuildTile(selected)}
+            onBuildShip={setBuildShipyard}
             onDeselect={() => setSelectedId(null)}
           />
         </div>
@@ -165,6 +183,14 @@ export default function HexMapPage() {
           tile={buildTile}
           onClose={() => setBuildTile(null)}
           onBuilt={() => setBuildTile(null)}
+        />
+      )}
+      {buildShipyard && (
+        <BuildShipModal
+          shipyard={buildShipyard}
+          inProgress={buildsByShipyard[buildShipyard.id]?.length ?? 0}
+          onClose={() => setBuildShipyard(null)}
+          onQueued={() => setBuildShipyard(null)}
         />
       )}
     </div>
@@ -271,17 +297,23 @@ function SectorPanel({
   tile,
   terrainMap,
   stations,
+  ships,
+  buildsByShipyard,
   isAdmin,
   isCommander,
   onBuild,
+  onBuildShip,
   onDeselect,
 }: {
   tile: HexTile | null;
   terrainMap: TerrainMap | null;
   stations: Station[];
+  ships: Ship[];
+  buildsByShipyard: Record<string, ShipBuildOrder[]>;
   isAdmin: boolean;
   isCommander: boolean;
   onBuild: () => void;
+  onBuildShip: (shipyard: Station) => void;
   onDeselect: () => void;
 }) {
   if (!tile) {
@@ -367,6 +399,14 @@ function SectorPanel({
                 <div className="text-[11px] text-muted/70 mt-0.5">
                   {s.built_by_name ? `Built by ${s.built_by_name}` : "Campaign start"} · turn {s.built_on_turn}
                 </div>
+                {s.kind === "shipyard" && (
+                  <ShipyardBuilds
+                    shipyard={s}
+                    orders={buildsByShipyard[s.id] ?? []}
+                    isCommander={isCommander}
+                    onBuildShip={() => onBuildShip(s)}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -375,11 +415,25 @@ function SectorPanel({
         )}
       </div>
 
-      {/* Placeholder for the system this map is being built to host next. */}
-      <div className="mt-4 space-y-3 border-t border-border pt-3">
-        <FutureSection title="Ships">
-          No ships in this sector — movement arrives in a future update.
-        </FutureSection>
+      <div className="mt-4 border-t border-border pt-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Ships ({ships.length})
+        </div>
+        {ships.length ? (
+          <ul className="mt-2 space-y-1">
+            {shipCounts(ships).map((g) => (
+              <li key={g.name} className="flex items-center justify-between text-sm">
+                <span className="truncate">{g.name}</span>
+                <span className="text-muted tabular-nums shrink-0">×{g.count}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted/80 mt-1">No ships stationed here.</p>
+        )}
+        <p className="text-[11px] text-muted/70 mt-1">
+          Shared campaign stock. Movement arrives in a future update.
+        </p>
       </div>
 
       {isAdmin && <TileEditor tile={tile} />}
@@ -387,11 +441,67 @@ function SectorPanel({
   );
 }
 
-function FutureSection({ title, children }: { title: string; children: string }) {
+// Collapse a sector's ships into per-class counts for a compact list.
+function shipCounts(ships: Ship[]): { name: string; count: number }[] {
+  const m = new Map<string, number>();
+  for (const s of ships) m.set(s.ship_class_name, (m.get(s.ship_class_name) ?? 0) + 1);
+  return [...m.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function ShipyardBuilds({
+  shipyard,
+  orders,
+  isCommander,
+  onBuildShip,
+}: {
+  shipyard: Station;
+  orders: ShipBuildOrder[];
+  isCommander: boolean;
+  onBuildShip: () => void;
+}) {
+  const used = orders.length;
+  const slots = shipyard.build_slots;
+  const full = used >= slots;
   return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</div>
-      <p className="text-xs text-muted/80 mt-0.5">{children}</p>
+    <div className="mt-2 rounded-lg bg-black/10 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          Build slots {used}/{slots}
+        </span>
+        {isCommander && (
+          <button
+            className="btn-primary text-[11px] py-0.5 px-2 disabled:opacity-50"
+            disabled={full}
+            title={full ? "All build slots are in use" : undefined}
+            onClick={onBuildShip}
+          >
+            + Build ship
+          </button>
+        )}
+      </div>
+      {orders.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {orders.map((o) => {
+            const done = o.build_time - o.turns_remaining;
+            const pct = o.build_time > 0 ? (done / o.build_time) * 100 : 0;
+            return (
+              <li key={o.id}>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="truncate">{o.ship_class_name}</span>
+                  <span className="text-muted shrink-0 tabular-nums">
+                    {o.turns_remaining} {o.turns_remaining === 1 ? "turn" : "turns"}
+                  </span>
+                </div>
+                <div className="h-1 rounded-full bg-border overflow-hidden mt-0.5">
+                  <div className="h-full bg-amber" style={{ width: `${pct}%` }} />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -730,6 +840,138 @@ function BuildStationModal({
                       +{t.production_amount.toLocaleString()} {RESOURCE_LABELS[t.produced_resource]}/turn
                     </div>
                   )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <button className="btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function BuildShipModal({
+  shipyard,
+  inProgress,
+  onClose,
+  onQueued,
+}: {
+  shipyard: Station;
+  inProgress: number;
+  onClose: () => void;
+  onQueued: () => void;
+}) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const classes = useQuery({ queryKey: ["ship-classes"], queryFn: api.listShipClasses });
+  const resources = useQuery({ queryKey: ["resources"], queryFn: api.getResources });
+  const [chosenId, setChosenId] = useState<string | null>(null);
+
+  const balances: Partial<Record<ResourceType, number>> = {};
+  for (const b of resources.data?.balances ?? []) balances[b.resource] = b.amount;
+  const canAfford = (cost: Partial<Record<ResourceType, number>>) =>
+    (Object.keys(RESOURCE_LABELS) as ResourceType[]).every(
+      (r) => (balances[r] ?? 0) >= (cost[r] ?? 0),
+    );
+
+  const chosen = (classes.data ?? []).find((c) => c.id === chosenId) ?? null;
+  const slotsFree = shipyard.build_slots - inProgress;
+
+  const queue = useMutation({
+    mutationFn: () => api.queueShipBuild(shipyard.id, chosenId!),
+    onSuccess: (o) => {
+      toast(`Queued ${o.ship_class_name} — ready in ${o.turns_remaining} turns.`, "success");
+      qc.invalidateQueries({ queryKey: ["ship-builds"] });
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      onQueued();
+    },
+    onError: (e: any) => toast(e.message ?? "Could not queue the build", "error"),
+  });
+
+  const title = `Build at ${shipyard.station_type_name}`;
+
+  // Step 2: confirm the chosen class.
+  if (chosen) {
+    const affordable = canAfford(chosen.cost);
+    return (
+      <Modal open onClose={onClose} title={title}>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border p-3">
+            <div className="font-bold">{chosen.name}</div>
+            {chosen.description && (
+              <p className="text-sm text-muted mt-1">{chosen.description}</p>
+            )}
+            <div className="text-sm mt-2">
+              <span className="text-muted">Cost:</span> {costSummary(chosen.cost)}
+            </div>
+            <div className="text-sm">
+              <span className="text-muted">Build time:</span> {chosen.build_time}{" "}
+              {chosen.build_time === 1 ? "turn" : "turns"}
+            </div>
+          </div>
+          {!affordable && (
+            <div className="text-sm text-bad">
+              The campaign can’t afford this ship right now.
+            </div>
+          )}
+          {slotsFree <= 0 && (
+            <div className="text-sm text-bad">This shipyard has no free build slots.</div>
+          )}
+          <div className="flex justify-between gap-2">
+            <button className="btn-ghost" onClick={() => setChosenId(null)}>
+              ← Back
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!affordable || slotsFree <= 0 || queue.isPending}
+              onClick={() => queue.mutate()}
+            >
+              {queue.isPending ? "Queuing…" : "Confirm & queue"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Step 1: pick a ship class.
+  return (
+    <Modal open onClose={onClose} title={title}>
+      <div className="space-y-3">
+        <p className="text-sm text-muted">
+          {slotsFree} of {shipyard.build_slots} build{" "}
+          {shipyard.build_slots === 1 ? "slot" : "slots"} free. Choose a ship class to queue.
+        </p>
+        {classes.isLoading ? (
+          <Spinner label="Loading ship classes…" />
+        ) : !classes.data?.length ? (
+          <EmptyState
+            title="No ship classes"
+            hint="An admin must create ship classes first."
+          />
+        ) : (
+          <div className="space-y-2">
+            {classes.data.map((c) => {
+              const affordable = canAfford(c.cost);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setChosenId(c.id)}
+                  className="w-full text-left rounded-xl border border-border p-3 hover:border-amber transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{c.name}</span>
+                    {!affordable && <span className="badge bg-bad/15 text-bad">can’t afford</span>}
+                  </div>
+                  <div className="text-xs text-muted mt-1">
+                    Cost: {costSummary(c.cost)} · {c.build_time}{" "}
+                    {c.build_time === 1 ? "turn" : "turns"}
+                  </div>
                 </button>
               );
             })}

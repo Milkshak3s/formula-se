@@ -126,9 +126,38 @@ export interface Station {
   kind: StationKind;
   produced_resource: ResourceType | null;
   production_amount: number;
+  build_slots: number;
   built_by: string | null;
   built_by_name: string | null;
   built_on_turn: number;
+  created_at: string;
+}
+
+export interface Ship {
+  id: string;
+  ship_class_id: string;
+  ship_class_name: string;
+  hex_tile_id: string;
+  q: number;
+  r: number;
+  built_by: string | null;
+  built_by_name: string | null;
+  built_on_turn: number;
+  created_at: string;
+}
+
+export interface ShipBuildOrder {
+  id: string;
+  shipyard_id: string;
+  q: number;
+  r: number;
+  ship_class_id: string;
+  ship_class_name: string;
+  turns_remaining: number;
+  build_time: number;
+  queued_by: string | null;
+  queued_by_name: string | null;
+  queued_on_turn: number;
   created_at: string;
 }
 

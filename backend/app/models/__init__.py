@@ -16,7 +16,14 @@ from app.models.enums import (
 )
 from app.models.job import Job
 from app.models.server import GameServer
-from app.models.ship import Blueprint, BlueprintSlot, Requirement, ShipClass
+from app.models.ship import (
+    Blueprint,
+    BlueprintSlot,
+    Requirement,
+    Ship,
+    ShipBuildOrder,
+    ShipClass,
+)
 from app.models.setting import AppSetting
 from app.models.user import Session as UserSession
 from app.models.user import User
@@ -52,6 +59,8 @@ __all__ = [
     "Blueprint",
     "BlueprintSlot",
     "Requirement",
+    "Ship",
+    "ShipBuildOrder",
     "ShipClass",
     "AppSetting",
     "UserSession",

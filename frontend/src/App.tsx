@@ -8,6 +8,7 @@ import ShipClassesPage from "./pages/ShipClassesPage";
 import SlotsPage from "./pages/SlotsPage";
 import MapsPage from "./pages/MapsPage";
 import HexMapPage from "./pages/HexMapPage";
+import FleetPage from "./pages/FleetPage";
 import StationTypesPage from "./pages/StationTypesPage";
 import StartWorldPage from "./pages/StartWorldPage";
 import PreparedWorldsPage from "./pages/PreparedWorldsPage";
@@ -46,6 +47,7 @@ export default function App() {
       <Route path="/slots" element={<Protected><SlotsPage /></Protected>} />
       <Route path="/maps" element={<Protected><MapsPage /></Protected>} />
       <Route path="/sector-map" element={<Protected><HexMapPage /></Protected>} />
+      <Route path="/fleet" element={<Protected><FleetPage /></Protected>} />
       <Route path="/station-types" element={<Protected><StationTypesPage /></Protected>} />
       <Route
         path="/start-world"

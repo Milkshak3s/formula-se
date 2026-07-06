@@ -37,6 +37,83 @@ class ShipClass(UUIDPk, Timestamped, Base):
     )
 
 
+class ShipBuildOrder(UUIDPk, Timestamped, Base):
+    """A ship under construction, occupying one of a shipyard's build slots.
+
+    Slots are tied to the specific shipyard (``Station``): the FK CASCADEs, so if
+    the shipyard is demolished or the sector map is regenerated the in-progress
+    order is lost (the ship never finishes). ``turns_remaining`` starts at the
+    class's ``build_time`` and is decremented each turn; when it hits zero the
+    order is deleted and a :class:`Ship` is created at the shipyard's sector.
+
+    A shipyard may host at most ``StationType.build_slots`` orders at once, all
+    progressing in parallel — there is no waiting queue beyond the slots.
+    """
+
+    __tablename__ = "ship_build_orders"
+
+    # The shipyard station building this ship. CASCADE: destroying the shipyard
+    # (or regenerating the map) loses everything it had in build.
+    shipyard_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("stations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # RESTRICT: a class with active builds can't be deleted out from under them.
+    ship_class_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ship_classes.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    turns_remaining: Mapped[int] = mapped_column(Integer, nullable=False)
+    queued_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    queued_on_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    ship_class: Mapped[ShipClass] = relationship()
+    shipyard = relationship("Station")
+
+
+class Ship(UUIDPk, Timestamped, Base):
+    """A completed ship in the campaign's shared stock, sitting on a sector.
+
+    Ships are campaign-wide (not individually owned), mirroring the shared
+    treasury. A ship's ``hex_tile`` is its location on the sector map — it starts
+    at the shipyard that built it (or wherever an admin places a manually granted
+    ship). Movement and other map interactions are a later pass. CASCADE with the
+    tile: regenerating the sector map (a full board reset) clears ship stock too.
+    """
+
+    __tablename__ = "ships"
+
+    # RESTRICT: a class with ships in stock can't be deleted out from under them.
+    ship_class_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ship_classes.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    # The sector this ship is located in. CASCADE with the tile (map regenerate).
+    hex_tile_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hex_tiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Who caused this ship to exist: the commander who queued its build, the admin
+    # who granted it, or null for a campaign gift. Purely informational.
+    built_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    built_on_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    ship_class: Mapped[ShipClass] = relationship()
+    hex_tile = relationship("HexTile")
+
+
 class Requirement(UUIDPk, Timestamped, Base):
     __tablename__ = "requirements"
 

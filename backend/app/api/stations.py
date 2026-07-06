@@ -36,6 +36,7 @@ def _out(station: Station, builder_name: str | None) -> StationOut:
         kind=st.kind,
         produced_resource=st.produced_resource,
         production_amount=st.production_amount,
+        build_slots=st.build_slots,
         built_by=station.built_by,
         built_by_name=builder_name,
         built_on_turn=station.built_on_turn,

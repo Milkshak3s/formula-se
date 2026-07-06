@@ -13,6 +13,8 @@ import type {
   ResourceState,
   ResourceType,
   ServerCreated,
+  Ship,
+  ShipBuildOrder,
   ShipClass,
   Slot,
   Station,
@@ -198,6 +200,25 @@ export const api = {
     }),
   demolishStation: (id: string) =>
     request<void>(`/api/stations/${id}`, { method: "DELETE" }),
+
+  // --- ships (shared stock) ---
+  listShips: () => request<Ship[]>("/api/ships"),
+  grantShip: (ship_class_id: string, hex_tile_id: string) =>
+    request<Ship>("/api/ships", {
+      method: "POST",
+      ...json({ ship_class_id, hex_tile_id }),
+    }),
+  scrapShip: (id: string) => request<void>(`/api/ships/${id}`, { method: "DELETE" }),
+
+  // --- ship build queue ---
+  listShipBuilds: () => request<ShipBuildOrder[]>("/api/ship-builds"),
+  queueShipBuild: (shipyard_id: string, ship_class_id: string) =>
+    request<ShipBuildOrder>("/api/ship-builds", {
+      method: "POST",
+      ...json({ shipyard_id, ship_class_id }),
+    }),
+  cancelShipBuild: (id: string) =>
+    request<void>(`/api/ship-builds/${id}`, { method: "DELETE" }),
 
   // --- turns ---
   getTurnState: () => request<TurnState>("/api/turns"),

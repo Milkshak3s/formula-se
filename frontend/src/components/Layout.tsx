@@ -25,6 +25,7 @@ const NAV: NavSection[] = [
     items: [
       { to: "/", label: "Dashboard" },
       { to: "/sector-map", label: "Sector Map" },
+      { to: "/fleet", label: "Fleet" },
       { to: "/slots", label: "Blueprint Slots" },
       { to: "/start-world", label: "Start a World", role: "commander" },
       { to: "/prepared-worlds", label: "Prepared Worlds" },

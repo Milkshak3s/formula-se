@@ -117,8 +117,11 @@ export default function DashboardPage() {
   const maps = useQuery({ queryKey: ["maps"], queryFn: api.listMaps });
   const worlds = useQuery({ queryKey: ["prepared-worlds"], queryFn: api.listPreparedWorlds });
   const stations = useQuery({ queryKey: ["stations"], queryFn: api.listStations });
+  const ships = useQuery({ queryKey: ["ships"], queryFn: api.listShips });
+  const builds = useQuery({ queryKey: ["ship-builds"], queryFn: api.listShipBuilds });
 
   const filled = (slots.data ?? []).filter((s) => s.active_blueprint).length;
+  const inBuild = builds.data?.length ?? 0;
 
   return (
     <div>
@@ -131,7 +134,7 @@ export default function DashboardPage() {
 
       <ResourceTreasury />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Stat label="Ship classes" value={classes.data?.length ?? 0} to="/ship-classes" />
         <Stat
           label="Slots filled"
@@ -140,6 +143,11 @@ export default function DashboardPage() {
         />
         <Stat label="Game maps" value={maps.data?.length ?? 0} to="/maps" />
         <Stat label="Stations" value={stations.data?.length ?? 0} to="/sector-map" />
+        <Stat
+          label={inBuild ? `Ships (${inBuild} building)` : "Ships"}
+          value={ships.data?.length ?? 0}
+          to="/fleet"
+        />
         <Stat
           label="Prepared worlds"
           value={worlds.data?.length ?? 0}

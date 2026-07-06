@@ -61,6 +61,47 @@ class ShipClassOut(BaseModel):
     requirements: list[RequirementOut] = Field(default_factory=list)
 
 
+# --- ship construction: build orders and completed stock ---
+class ShipBuildCreate(BaseModel):
+    shipyard_id: uuid.UUID
+    ship_class_id: uuid.UUID
+
+
+class ShipBuildOrderOut(BaseModel):
+    id: uuid.UUID
+    shipyard_id: uuid.UUID
+    q: int
+    r: int
+    ship_class_id: uuid.UUID
+    ship_class_name: str
+    turns_remaining: int
+    build_time: int
+    queued_by: uuid.UUID | None = None
+    queued_by_name: str | None = None
+    queued_on_turn: int
+    created_at: datetime
+
+
+class ShipCreate(BaseModel):
+    """Admin manual ship grant into shared stock."""
+
+    ship_class_id: uuid.UUID
+    hex_tile_id: uuid.UUID
+
+
+class ShipOut(BaseModel):
+    id: uuid.UUID
+    ship_class_id: uuid.UUID
+    ship_class_name: str
+    hex_tile_id: uuid.UUID
+    q: int
+    r: int
+    built_by: uuid.UUID | None = None
+    built_by_name: str | None = None
+    built_on_turn: int
+    created_at: datetime
+
+
 class BlueprintOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
