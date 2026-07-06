@@ -9,7 +9,7 @@ resources:
 images:
   - name: ghcr.io/milkshak3s/formula-se-backend
     newName: docker.io/gobworks/formula-se-backend
-    newTag: "0.1.13"
+    newTag: "0.1.14"
   - name: ghcr.io/milkshak3s/formula-se-web
     newName: docker.io/gobworks/formula-se-web
     newTag: "0.1.13"
