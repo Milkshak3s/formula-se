@@ -10,11 +10,13 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_commander
 from app.models.enums import BlueprintStatus, PreparedWorldStatus
 from app.models.ship import BlueprintSlot
+from app.models.station import StationType
 from app.models.user import User
 from app.models.world import (
     GameMap,
     PreparedWorld,
     PreparedWorldAssignment,
+    PreparedWorldStationAssignment,
     StartSlot,
     StartSlotClass,
 )
@@ -55,7 +57,8 @@ def create_prepared(
     game_map = db.execute(
         select(GameMap)
         .options(
-            selectinload(GameMap.start_slots).selectinload(StartSlot.supported_classes)
+            selectinload(GameMap.start_slots).selectinload(StartSlot.supported_classes),
+            selectinload(GameMap.station_slots),
         )
         .where(GameMap.id == payload.map_id)
     ).scalar_one_or_none()
@@ -63,6 +66,7 @@ def create_prepared(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Map not found")
 
     start_slots = {s.id: s for s in game_map.start_slots}
+    station_slots = {s.id: s for s in game_map.station_slots}
 
     pw = PreparedWorld(
         map_id=game_map.id,
@@ -113,6 +117,37 @@ def create_prepared(
                 gps_y=start_slot.gps_y,
                 gps_z=start_slot.gps_z,
                 blueprint_id=active_bp.id,
+            )
+        )
+
+    for station_assignment in payload.station_assignments:
+        if station_assignment.station_type_id is None:
+            continue
+        station_slot = station_slots.get(station_assignment.station_slot_id)
+        if station_slot is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Station slot {station_assignment.station_slot_id} not on this map",
+            )
+        station_type = db.get(StationType, station_assignment.station_type_id)
+        if station_type is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Station type not found")
+        if not station_type.b2_key:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Station type '{station_type.name}' has no blueprint to inject",
+            )
+
+        db.add(
+            PreparedWorldStationAssignment(
+                prepared_world_id=pw.id,
+                station_slot_id=station_slot.id,
+                station_slot_name=station_slot.name,
+                gps_x=station_slot.gps_x,
+                gps_y=station_slot.gps_y,
+                gps_z=station_slot.gps_z,
+                station_type_id=station_type.id,
+                station_type_name=station_type.name,
             )
         )
 

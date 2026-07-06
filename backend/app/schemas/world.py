@@ -59,10 +59,16 @@ class AssignmentIn(BaseModel):
     slot_id: uuid.UUID | None = None  # None → leave start slot empty
 
 
+class StationAssignmentIn(BaseModel):
+    station_slot_id: uuid.UUID
+    station_type_id: uuid.UUID | None = None  # None → leave station slot empty
+
+
 class PreparedWorldCreate(BaseModel):
     map_id: uuid.UUID
     name: str = Field(min_length=1, max_length=160)
     assignments: list[AssignmentIn] = Field(default_factory=list)
+    station_assignments: list[StationAssignmentIn] = Field(default_factory=list)
 
 
 class PreparedWorldOut(BaseModel):

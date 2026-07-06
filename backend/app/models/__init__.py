@@ -31,6 +31,7 @@ from app.models.world import (
     GameMap,
     PreparedWorld,
     PreparedWorldAssignment,
+    PreparedWorldStationAssignment,
     StartSlot,
     StartSlotClass,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "GameMap",
     "PreparedWorld",
     "PreparedWorldAssignment",
+    "PreparedWorldStationAssignment",
     "StartSlot",
     "StartSlotClass",
 ]

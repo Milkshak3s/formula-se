@@ -4,24 +4,36 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/toast";
 import { Card, EmptyState, PageHeader, Spinner } from "../components/ui";
-import type { GameMap, Slot } from "../api/types";
+import type { GameMap, Slot, StationType } from "../api/types";
 
 export default function StartWorldPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const maps = useQuery({ queryKey: ["maps"], queryFn: api.listMaps });
   const slots = useQuery({ queryKey: ["slots"], queryFn: api.listSlots });
+  const stationTypes = useQuery({
+    queryKey: ["station-types"],
+    queryFn: api.listStationTypes,
+  });
 
   const [step, setStep] = useState(1);
   const [mapId, setMapId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [assignments, setAssignments] = useState<Record<string, string>>({}); // startSlotId -> slotId
+  const [stationAssignments, setStationAssignments] = useState<Record<string, string>>(
+    {},
+  ); // stationSlotId -> stationTypeId
 
   const selectedMap: GameMap | undefined = maps.data?.find((m) => m.id === mapId);
 
   const filledSlots = useMemo(
     () => (slots.data ?? []).filter((s) => s.active_blueprint),
     [slots.data],
+  );
+  // Only station types with an uploaded grid can be injected into a save.
+  const buildableStations = useMemo(
+    () => (stationTypes.data ?? []).filter((t: StationType) => t.has_blueprint),
+    [stationTypes.data],
   );
 
   const create = useMutation({
@@ -32,6 +44,12 @@ export default function StartWorldPage() {
         assignments: Object.entries(assignments)
           .filter(([, slotId]) => slotId)
           .map(([start_slot_id, slot_id]) => ({ start_slot_id, slot_id })),
+        station_assignments: Object.entries(stationAssignments)
+          .filter(([, typeId]) => typeId)
+          .map(([station_slot_id, station_type_id]) => ({
+            station_slot_id,
+            station_type_id,
+          })),
       }),
     onSuccess: () => {
       toast("World queued — preparing your save.", "success");
@@ -39,7 +57,8 @@ export default function StartWorldPage() {
     },
   });
 
-  if (maps.isLoading || slots.isLoading) return <Spinner label="Loading…" />;
+  if (maps.isLoading || slots.isLoading || stationTypes.isLoading)
+    return <Spinner label="Loading…" />;
   if (!maps.data?.length)
     return (
       <div>
@@ -53,7 +72,7 @@ export default function StartWorldPage() {
       <PageHeader title="Start a World" subtitle="Assemble a match and generate a ready-to-run save." />
 
       <div className="flex gap-2 mb-6 text-sm">
-        {["Map & name", "Assign ships", "Confirm"].map((s, i) => (
+        {["Map & name", "Assign ships", "Assign stations", "Confirm"].map((s, i) => (
           <div
             key={s}
             className={`flex items-center gap-2 rounded-full px-3 py-1 ${
@@ -156,6 +175,52 @@ export default function StartWorldPage() {
 
       {step === 3 && selectedMap && (
         <Card className="space-y-4 max-w-2xl">
+          {selectedMap.station_slots.length === 0 ? (
+            <p className="text-muted text-sm">
+              This map has no station slots defined. Continue to confirm.
+            </p>
+          ) : buildableStations.length === 0 ? (
+            <p className="text-muted text-sm">
+              No station types have an uploaded blueprint yet, so none can be placed.
+              An admin can add one on the Station Types page. Continue to confirm.
+            </p>
+          ) : (
+            selectedMap.station_slots.map((ss) => (
+              <div key={ss.id} className="rounded-xl border border-border p-3">
+                <div className="font-medium">{ss.name}</div>
+                <div className="text-xs text-muted mb-2">
+                  ({ss.gps_x.toFixed(0)}, {ss.gps_y.toFixed(0)}, {ss.gps_z.toFixed(0)})
+                </div>
+                <select
+                  className="input"
+                  value={stationAssignments[ss.id] ?? ""}
+                  onChange={(e) =>
+                    setStationAssignments((a) => ({ ...a, [ss.id]: e.target.value }))
+                  }
+                >
+                  <option value="">— Leave empty —</option>
+                  {buildableStations.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.kind})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))
+          )}
+          <div className="flex justify-between">
+            <button className="btn-ghost" onClick={() => setStep(2)}>
+              Back
+            </button>
+            <button className="btn-primary" onClick={() => setStep(4)}>
+              Next
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {step === 4 && selectedMap && (
+        <Card className="space-y-4 max-w-2xl">
           <div>
             <div className="text-sm text-muted">Run name</div>
             <div className="font-semibold">{name}</div>
@@ -165,7 +230,7 @@ export default function StartWorldPage() {
             <div className="font-semibold">{selectedMap.name}</div>
           </div>
           <div>
-            <div className="text-sm text-muted mb-1">Assignments</div>
+            <div className="text-sm text-muted mb-1">Ship assignments</div>
             <ul className="space-y-1 text-sm">
               {selectedMap.start_slots.map((ss) => {
                 const slot = filledSlots.find((s) => s.id === assignments[ss.id]);
@@ -180,11 +245,29 @@ export default function StartWorldPage() {
               })}
             </ul>
           </div>
+          {selectedMap.station_slots.length > 0 && (
+            <div>
+              <div className="text-sm text-muted mb-1">Station assignments</div>
+              <ul className="space-y-1 text-sm">
+                {selectedMap.station_slots.map((ss) => {
+                  const type = buildableStations.find(
+                    (t) => t.id === stationAssignments[ss.id],
+                  );
+                  return (
+                    <li key={ss.id} className="flex justify-between border-b border-border py-1">
+                      <span>{ss.name}</span>
+                      <span className="text-muted">{type ? type.name : "empty"}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {create.isError && (
             <div className="text-sm text-bad">{(create.error as any).message}</div>
           )}
           <div className="flex justify-between">
-            <button className="btn-ghost" onClick={() => setStep(2)}>
+            <button className="btn-ghost" onClick={() => setStep(3)}>
               Back
             </button>
             <button className="btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>

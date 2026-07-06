@@ -135,6 +135,10 @@ export const api = {
     map_id: string;
     name: string;
     assignments: { start_slot_id: string; slot_id: string | null }[];
+    station_assignments?: {
+      station_slot_id: string;
+      station_type_id: string | null;
+    }[];
   }) => request<PreparedWorld>("/api/prepared-worlds", { method: "POST", ...json(data) }),
   downloadPreparedWorld: (id: string) =>
     request<{ url: string }>(`/api/prepared-worlds/${id}/download`),

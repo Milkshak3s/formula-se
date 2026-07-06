@@ -118,6 +118,9 @@ class PreparedWorld(UUIDPk, Timestamped, Base):
     assignments: Mapped[list["PreparedWorldAssignment"]] = relationship(
         back_populates="prepared_world", cascade="all, delete-orphan"
     )
+    station_assignments: Mapped[list["PreparedWorldStationAssignment"]] = relationship(
+        back_populates="prepared_world", cascade="all, delete-orphan"
+    )
 
 
 class PreparedWorldAssignment(Base):
@@ -152,3 +155,51 @@ class PreparedWorldAssignment(Base):
     )
 
     prepared_world: Mapped[PreparedWorld] = relationship(back_populates="assignments")
+
+
+class PreparedWorldStationAssignment(Base):
+    """A station grid chosen for one of a map's station slots in a prepared world.
+
+    Mirrors :class:`PreparedWorldAssignment` but for stations: a
+    :class:`~app.models.station.StationType` (which carries an uploaded grid
+    blueprint) is injected at the station slot's GPS. Snapshots the slot's name +
+    coordinates so later map edits don't rewrite history. Both FKs are SET NULL:
+    a station slot stays editable and a station type stays deletable after an
+    (ephemeral, TTL-expiring) prepared world has referenced them — at prep time a
+    null type is simply skipped.
+    """
+
+    __tablename__ = "prepared_world_station_assignments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    prepared_world_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("prepared_worlds.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    station_slot_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("station_slots.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    station_slot_name: Mapped[str] = mapped_column(
+        String(120), default="", nullable=False
+    )
+    gps_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    station_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("station_types.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    station_type_name: Mapped[str] = mapped_column(
+        String(120), default="", nullable=False
+    )
+
+    prepared_world: Mapped[PreparedWorld] = relationship(
+        back_populates="station_assignments"
+    )
