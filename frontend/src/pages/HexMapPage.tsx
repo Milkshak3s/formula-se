@@ -616,6 +616,9 @@ function BuildStationModal({
   const resources = useQuery({ queryKey: ["resources"], queryFn: api.getResources });
   const [chosen, setChosen] = useState<StationType | null>(null);
 
+  // The starter shipyard is a one-per-campaign gift, not a buildable type.
+  const buildable = (types.data ?? []).filter((t) => !t.is_starter);
+
   const balances: Partial<Record<ResourceType, number>> = {};
   for (const b of resources.data?.balances ?? []) balances[b.resource] = b.amount;
   const canAfford = (t: StationType) =>
@@ -695,14 +698,14 @@ function BuildStationModal({
         <p className="text-sm text-muted">Choose a station type to construct here.</p>
         {types.isLoading ? (
           <Spinner label="Loading station types…" />
-        ) : !types.data?.length ? (
+        ) : !buildable.length ? (
           <EmptyState
             title="No station types"
             hint="An admin must create station types first."
           />
         ) : (
           <div className="space-y-2">
-            {types.data.map((t) => {
+            {buildable.map((t) => {
               const affordable = canAfford(t);
               return (
                 <button

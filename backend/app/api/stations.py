@@ -82,6 +82,11 @@ def build(
     station_type = db.get(StationType, payload.station_type_id)
     if station_type is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Station type not found")
+    if station_type.is_starter:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "The starter shipyard is a campaign gift and cannot be built",
+        )
 
     try:
         station = build_station(db, tile, station_type, user)
