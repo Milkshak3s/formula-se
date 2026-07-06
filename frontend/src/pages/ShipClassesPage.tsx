@@ -231,6 +231,10 @@ export default function ShipClassesPage() {
                   <span className="text-muted">Build time:</span>{" "}
                   {c.build_time.toLocaleString()} {c.build_time === 1 ? "turn" : "turns"}
                 </div>
+                <div>
+                  <span className="text-muted">Speed:</span>{" "}
+                  {c.speed.toLocaleString()} {c.speed === 1 ? "sector" : "sectors"}/turn
+                </div>
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 {c.requirements.length ? (
@@ -277,6 +281,7 @@ function ClassModal({
   const [description, setDescription] = useState(klass?.description ?? "");
   const [cost, setCost] = useState<Partial<Record<ResourceType, number>>>(klass?.cost ?? {});
   const [buildTime, setBuildTime] = useState<number>(klass?.build_time ?? 1);
+  const [speed, setSpeed] = useState<number>(klass?.speed ?? 1);
   const [rules, setRules] = useState<Requirement[]>(klass?.requirements ?? []);
   const [error, setError] = useState<string | null>(null);
 
@@ -289,6 +294,7 @@ function ClassModal({
         description,
         cost: cleanCost,
         build_time: buildTime,
+        speed,
         requirements: rules,
       };
       if (klass) return api.updateShipClass(klass.id, payload);
@@ -331,16 +337,29 @@ function ClassModal({
             ))}
           </div>
         </div>
-        <div>
-          <label className="label">Build time</label>
-          <input
-            className="input"
-            type="number"
-            min={1}
-            value={buildTime}
-            onChange={(e) => setBuildTime(Number(e.target.value))}
-          />
-          <p className="text-xs text-muted mt-1">Turns a shipyard needs to build one ship.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Build time</label>
+            <input
+              className="input"
+              type="number"
+              min={1}
+              value={buildTime}
+              onChange={(e) => setBuildTime(Number(e.target.value))}
+            />
+            <p className="text-xs text-muted mt-1">Turns to build one ship.</p>
+          </div>
+          <div>
+            <label className="label">Speed</label>
+            <input
+              className="input"
+              type="number"
+              min={1}
+              value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+            />
+            <p className="text-xs text-muted mt-1">Sectors moved per turn.</p>
+          </div>
         </div>
         <div>
           <label className="label">Requirements</label>

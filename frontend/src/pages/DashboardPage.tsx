@@ -122,6 +122,13 @@ export default function DashboardPage() {
 
   const filled = (slots.data ?? []).filter((s) => s.active_blueprint).length;
   const inBuild = builds.data?.length ?? 0;
+  const moving = (ships.data ?? []).filter((s) => s.move_order).length;
+  const shipNote = [
+    inBuild ? `${inBuild} building` : "",
+    moving ? `${moving} moving` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div>
@@ -144,7 +151,7 @@ export default function DashboardPage() {
         <Stat label="Game maps" value={maps.data?.length ?? 0} to="/maps" />
         <Stat label="Stations" value={stations.data?.length ?? 0} to="/sector-map" />
         <Stat
-          label={inBuild ? `Ships (${inBuild} building)` : "Ships"}
+          label={shipNote ? `Ships (${shipNote})` : "Ships"}
           value={ships.data?.length ?? 0}
           to="/fleet"
         />

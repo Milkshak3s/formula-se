@@ -90,6 +90,7 @@ export default function HexMapPage() {
   const [terrainMapsOpen, setTerrainMapsOpen] = useState(false);
   const [buildTile, setBuildTile] = useState<HexTile | null>(null);
   const [buildShipyard, setBuildShipyard] = useState<Station | null>(null);
+  const [moveShip, setMoveShip] = useState<Ship | null>(null);
 
   const selected = map.data?.tiles.find((t) => t.id === selectedId) ?? null;
   const mapByTerrain = useMemo(() => {
@@ -157,6 +158,7 @@ export default function HexMapPage() {
             isCommander={isCommander}
             onBuild={() => selected && setBuildTile(selected)}
             onBuildShip={setBuildShipyard}
+            onMoveShip={setMoveShip}
             onDeselect={() => setSelectedId(null)}
           />
         </div>
@@ -191,6 +193,14 @@ export default function HexMapPage() {
           inProgress={buildsByShipyard[buildShipyard.id]?.length ?? 0}
           onClose={() => setBuildShipyard(null)}
           onQueued={() => setBuildShipyard(null)}
+        />
+      )}
+      {moveShip && map.data && (
+        <MoveShipModal
+          ship={moveShip}
+          tiles={map.data.tiles}
+          onClose={() => setMoveShip(null)}
+          onMoved={() => setMoveShip(null)}
         />
       )}
     </div>
@@ -303,6 +313,7 @@ function SectorPanel({
   isCommander,
   onBuild,
   onBuildShip,
+  onMoveShip,
   onDeselect,
 }: {
   tile: HexTile | null;
@@ -314,6 +325,7 @@ function SectorPanel({
   isCommander: boolean;
   onBuild: () => void;
   onBuildShip: (shipyard: Station) => void;
+  onMoveShip: (ship: Ship) => void;
   onDeselect: () => void;
 }) {
   if (!tile) {
@@ -415,39 +427,87 @@ function SectorPanel({
         )}
       </div>
 
-      <div className="mt-4 border-t border-border pt-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Ships ({ships.length})
-        </div>
-        {ships.length ? (
-          <ul className="mt-2 space-y-1">
-            {shipCounts(ships).map((g) => (
-              <li key={g.name} className="flex items-center justify-between text-sm">
-                <span className="truncate">{g.name}</span>
-                <span className="text-muted tabular-nums shrink-0">×{g.count}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-muted/80 mt-1">No ships stationed here.</p>
-        )}
-        <p className="text-[11px] text-muted/70 mt-1">
-          Shared campaign stock. Movement arrives in a future update.
-        </p>
-      </div>
+      <SectorShips ships={ships} isCommander={isCommander} onMoveShip={onMoveShip} />
 
       {isAdmin && <TileEditor tile={tile} />}
     </Card>
   );
 }
 
-// Collapse a sector's ships into per-class counts for a compact list.
-function shipCounts(ships: Ship[]): { name: string; count: number }[] {
-  const m = new Map<string, number>();
-  for (const s of ships) m.set(s.ship_class_name, (m.get(s.ship_class_name) ?? 0) + 1);
-  return [...m.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+function SectorShips({
+  ships,
+  isCommander,
+  onMoveShip,
+}: {
+  ships: Ship[];
+  isCommander: boolean;
+  onMoveShip: (ship: Ship) => void;
+}) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const cancelMove = useMutation({
+    mutationFn: (shipId: string) => api.cancelShipMove(shipId),
+    onSuccess: () => {
+      toast("Move order cancelled.", "success");
+      qc.invalidateQueries({ queryKey: ["ships"] });
+    },
+    onError: (e: any) => toast(e.message ?? "Could not cancel the move", "error"),
+  });
+
+  const sorted = useMemo(
+    () => [...ships].sort((a, b) => a.ship_class_name.localeCompare(b.ship_class_name)),
+    [ships],
+  );
+
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+        Ships ({ships.length})
+      </div>
+      {sorted.length ? (
+        <ul className="mt-2 space-y-1.5">
+          {sorted.map((s) => (
+            <li key={s.id} className="rounded-lg border border-border p-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium truncate">{s.ship_class_name}</span>
+                {isCommander &&
+                  (s.move_order ? (
+                    <button
+                      className="text-[11px] text-muted hover:text-bad shrink-0"
+                      disabled={cancelMove.isPending}
+                      onClick={() => cancelMove.mutate(s.id)}
+                    >
+                      Cancel move
+                    </button>
+                  ) : (
+                    <button
+                      className="text-[11px] text-amber hover:text-amber-dark shrink-0"
+                      onClick={() => onMoveShip(s)}
+                    >
+                      Move →
+                    </button>
+                  ))}
+              </div>
+              {s.move_order ? (
+                <div className="text-[11px] text-amber mt-0.5">
+                  → moving to ({s.move_order.dest_q}, {s.move_order.dest_r}) next turn
+                </div>
+              ) : (
+                <div className="text-[11px] text-muted/70 mt-0.5">
+                  speed {s.speed} {s.speed === 1 ? "sector" : "sectors"}/turn · holding
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted/80 mt-1">No ships stationed here.</p>
+      )}
+      <p className="text-[11px] text-muted/70 mt-1">
+        Shared campaign stock. Moves resolve on the next turn.
+      </p>
+    </div>
+  );
 }
 
 function ShipyardBuilds({
@@ -848,6 +908,89 @@ function BuildStationModal({
         <div className="flex justify-end">
           <button className="btn-ghost" onClick={onClose}>
             Cancel
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function MoveShipModal({
+  ship,
+  tiles,
+  onClose,
+  onMoved,
+}: {
+  ship: Ship;
+  tiles: HexTile[];
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [destId, setDestId] = useState("");
+
+  // Destinations within the ship's speed (in hexes) of its current sector.
+  const options = useMemo(
+    () =>
+      tiles
+        .map((t) => ({ t, dist: hexDistance(ship.q, ship.r, t.q, t.r) }))
+        .filter((o) => o.dist > 0 && o.dist <= ship.speed)
+        .sort((a, b) => a.dist - b.dist || a.t.r - b.t.r || a.t.q - b.t.q),
+    [tiles, ship],
+  );
+
+  const move = useMutation({
+    mutationFn: () => api.moveShip(ship.id, destId),
+    onSuccess: (o) => {
+      toast(
+        `Ordered ${ship.ship_class_name} to (${o.dest_q}, ${o.dest_r}) — arrives next turn.`,
+        "success",
+      );
+      qc.invalidateQueries({ queryKey: ["ships"] });
+      onMoved();
+    },
+    onError: (e: any) => toast(e.message ?? "Could not order the move", "error"),
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`Move ${ship.ship_class_name}`}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          From sector ({ship.q}, {ship.r}). This class travels {ship.speed}{" "}
+          {ship.speed === 1 ? "sector" : "sectors"} per turn; the ship relocates on
+          the next turn advance.
+        </p>
+        {options.length ? (
+          <div>
+            <label className="label">Destination (within range)</label>
+            <select
+              className="input"
+              value={destId}
+              onChange={(e) => setDestId(e.target.value)}
+            >
+              <option value="">— Select a sector —</option>
+              {options.map(({ t, dist }) => (
+                <option key={t.id} value={t.id}>
+                  {t.name?.trim() ? `${t.name} ` : ""}({t.q}, {t.r}) · {dist}{" "}
+                  {dist === 1 ? "jump" : "jumps"}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p className="text-sm text-bad">No sectors are within this ship's range.</p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn-primary"
+            disabled={!destId || move.isPending}
+            onClick={() => move.mutate()}
+          >
+            {move.isPending ? "Ordering…" : "Confirm move"}
           </button>
         </div>
       </div>

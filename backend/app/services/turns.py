@@ -68,9 +68,12 @@ def run_turn_hooks(db: Session, state: GameState) -> None:
       * resource generation — each resource station credits the treasury.
       * ship construction — every in-progress build advances a turn; finished
         ones complete into shared ship stock at their shipyard's sector.
+      * ship movement — every pending move order relocates its ship to the
+        destination sector and is cleared.
     """
-    from app.services.ships import progress_ship_builds
+    from app.services.ships import progress_ship_builds, progress_ship_moves
     from app.services.stations import generate_turn_resources
 
     generate_turn_resources(db)
     progress_ship_builds(db)
+    progress_ship_moves(db)

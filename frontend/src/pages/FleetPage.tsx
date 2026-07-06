@@ -154,6 +154,18 @@ function ShipStock({ tiles }: { tiles: HexTile[] }) {
                   {sectorLabel(g.q, g.r, tiles)}
                 </span>
               </div>
+              {g.ships.some((s) => s.move_order) && (
+                <div className="text-[11px] text-amber mt-1">
+                  {g.ships.filter((s) => s.move_order).length} en route ·{" "}
+                  {[
+                    ...new Set(
+                      g.ships
+                        .filter((s) => s.move_order)
+                        .map((s) => `(${s.move_order!.dest_q}, ${s.move_order!.dest_r})`),
+                    ),
+                  ].join(", ")}
+                </div>
+              )}
               {isAdmin && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {g.ships.map((s, i) => (

@@ -35,6 +35,7 @@ export interface ShipClass {
   description: string;
   cost: Partial<Record<ResourceType, number>>;
   build_time: number;
+  speed: number;
   created_at: string;
   requirements: Requirement[];
 }
@@ -133,10 +134,23 @@ export interface Station {
   created_at: string;
 }
 
+export interface ShipMoveOrder {
+  id: string;
+  ship_id: string;
+  dest_tile_id: string;
+  dest_q: number;
+  dest_r: number;
+  issued_by: string | null;
+  issued_by_name: string | null;
+  issued_on_turn: number;
+  created_at: string;
+}
+
 export interface Ship {
   id: string;
   ship_class_id: string;
   ship_class_name: string;
+  speed: number;
   hex_tile_id: string;
   q: number;
   r: number;
@@ -144,6 +158,7 @@ export interface Ship {
   built_by_name: string | null;
   built_on_turn: number;
   created_at: string;
+  move_order: ShipMoveOrder | null;
 }
 
 export interface ShipBuildOrder {

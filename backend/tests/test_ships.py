@@ -7,16 +7,22 @@ import uuid
 import pytest
 
 from app.core.database import Base
-from app.models.ship import Ship, ShipBuildOrder
-from app.schemas.ship import ShipBuildCreate, ShipCreate
-from app.services.ships import NotAShipyard, ShipyardFull
+from app.models.ship import Ship, ShipBuildOrder, ShipClass, ShipMoveOrder
+from app.schemas.ship import (
+    ShipBuildCreate,
+    ShipClassCreate,
+    ShipCreate,
+    ShipMoveCreate,
+)
+from app.services.ships import InvalidMove, NotAShipyard, OutOfRange, ShipyardFull
 
 
 def test_tables_are_registered_with_metadata():
     tables = set(Base.metadata.tables)
-    assert {"ship_build_orders", "ships"} <= tables
+    assert {"ship_build_orders", "ships", "ship_move_orders"} <= tables
     assert ShipBuildOrder.__tablename__ == "ship_build_orders"
     assert Ship.__tablename__ == "ships"
+    assert ShipMoveOrder.__tablename__ == "ship_move_orders"
 
 
 def _fk(model, target_table):
@@ -68,6 +74,48 @@ def test_ship_create_requires_class_and_tile():
 def test_run_turn_hooks_wires_ship_progress():
     # Ship-build progression is imported lazily inside run_turn_hooks; make sure
     # the service entrypoint it calls exists and is callable.
-    from app.services.ships import progress_ship_builds
+    from app.services.ships import progress_ship_builds, progress_ship_moves
 
     assert callable(progress_ship_builds)
+    assert callable(progress_ship_moves)
+
+
+# --- ship movement ---
+def test_move_order_cascades_with_ship_and_dest_tile():
+    # Scrapping a ship or wiping the board (tiles → ships) drops its move order.
+    assert _fk(ShipMoveOrder, "ships").ondelete == "CASCADE"
+    assert _fk(ShipMoveOrder, "hex_tiles").ondelete == "CASCADE"
+
+
+def test_move_order_is_one_per_ship():
+    # ship_id is unique so re-issuing replaces rather than stacking orders.
+    assert ShipMoveOrder.__table__.c.ship_id.unique is True
+
+
+def test_ship_class_speed_defaults_to_one():
+    payload = ShipClassCreate(name="Scout")
+    assert payload.speed == 1
+    with pytest.raises(ValueError):
+        ShipClassCreate(name="Immobile", speed=0)  # must be >= 1
+
+
+def test_ship_class_model_has_speed_column():
+    assert "speed" in ShipClass.__table__.c
+
+
+def test_out_of_range_reports_distance_and_speed():
+    exc = OutOfRange(distance=5, speed=2)
+    assert exc.distance == 5 and exc.speed == 2
+    assert "5" in str(exc) and "2" in str(exc)
+
+
+def test_invalid_move_is_an_exception():
+    with pytest.raises(InvalidMove):
+        raise InvalidMove("already there")
+
+
+def test_move_create_requires_destination():
+    payload = ShipMoveCreate(dest_tile_id=uuid.uuid4())
+    assert payload.dest_tile_id
+    with pytest.raises(ValueError):
+        ShipMoveCreate()  # missing dest_tile_id

@@ -56,6 +56,7 @@ def create_class(
         description=payload.description,
         cost={r.value: a for r, a in payload.cost.items() if a > 0},
         build_time=payload.build_time,
+        speed=payload.speed,
         created_by=admin.id,
     )
     for req in payload.requirements:
@@ -83,6 +84,8 @@ def update_class(
         obj.cost = {r.value: a for r, a in payload.cost.items() if a > 0}
     if payload.build_time is not None:
         obj.build_time = payload.build_time
+    if payload.speed is not None:
+        obj.speed = payload.speed
     if payload.requirements is not None:
         # Replace the whole requirement set.
         obj.requirements.clear()

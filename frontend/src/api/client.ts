@@ -16,6 +16,7 @@ import type {
   Ship,
   ShipBuildOrder,
   ShipClass,
+  ShipMoveOrder,
   Slot,
   Station,
   StationKind,
@@ -86,6 +87,7 @@ export const api = {
     description: string;
     cost: Partial<Record<ResourceType, number>>;
     build_time: number;
+    speed: number;
     requirements: Requirement[];
   }) => request<ShipClass>("/api/ship-classes", { method: "POST", ...json(data) }),
   updateShipClass: (id: string, data: Partial<ShipClass>) =>
@@ -213,6 +215,13 @@ export const api = {
       ...json({ ship_class_id, hex_tile_id }),
     }),
   scrapShip: (id: string) => request<void>(`/api/ships/${id}`, { method: "DELETE" }),
+  moveShip: (id: string, dest_tile_id: string) =>
+    request<ShipMoveOrder>(`/api/ships/${id}/move`, {
+      method: "POST",
+      ...json({ dest_tile_id }),
+    }),
+  cancelShipMove: (id: string) =>
+    request<void>(`/api/ships/${id}/move`, { method: "DELETE" }),
 
   // --- ship build queue ---
   listShipBuilds: () => request<ShipBuildOrder[]>("/api/ship-builds"),

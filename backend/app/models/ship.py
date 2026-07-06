@@ -23,6 +23,9 @@ class ShipClass(UUIDPk, Timestamped, Base):
     cost: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     # Turns a shipyard needs to build one ship of this class.
     build_time: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # How many sectors a ship of this class may travel per turn. A move order's
+    # destination must be within this many hexes of the ship's current sector.
+    speed: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -112,6 +115,53 @@ class Ship(UUIDPk, Timestamped, Base):
 
     ship_class: Mapped[ShipClass] = relationship()
     hex_tile = relationship("HexTile")
+    # The ship's pending move (at most one), resolved on the next turn advance.
+    # delete-orphan so clearing ``ship.move_order`` deletes the row; CASCADE at
+    # the FK level means scrapping the ship removes its order too.
+    move_order: Mapped["ShipMoveOrder | None"] = relationship(
+        back_populates="ship", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class ShipMoveOrder(UUIDPk, Timestamped, Base):
+    """A Commander's intent to move a ship to another sector.
+
+    Movement is turn-based: issuing an order only *records* the destination; the
+    ship actually relocates when the campaign advances to the next turn (see
+    ``services.ships.progress_ship_moves``). The destination is validated to be
+    within the ship class's ``speed`` in hexes at issue time — since the ship
+    can't move before the order resolves, that check still holds at resolution.
+
+    A ship has at most one pending order (``ship_id`` is unique); re-issuing
+    replaces the destination. Both FKs CASCADE: scrapping the ship, or wiping the
+    board on a sector-map regenerate (which cascades tiles → ships), drops the
+    order with it.
+    """
+
+    __tablename__ = "ship_move_orders"
+
+    # One pending move per ship — re-issuing updates this row in place.
+    ship_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ships.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    # Where the ship is headed. CASCADE with the tile (map regenerate).
+    dest_tile_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hex_tiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    issued_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    issued_on_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    ship: Mapped[Ship] = relationship(back_populates="move_order")
+    dest_tile = relationship("HexTile")
 
 
 class Requirement(UUIDPk, Timestamped, Base):

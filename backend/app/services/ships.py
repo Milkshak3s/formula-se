@@ -14,10 +14,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import StationKind
+from app.models.hexmap import HexTile
 from app.models.resource import ResourceBalance
-from app.models.ship import Ship, ShipBuildOrder, ShipClass
+from app.models.ship import Ship, ShipBuildOrder, ShipClass, ShipMoveOrder
 from app.models.station import Station
 from app.models.user import User
+from app.services.hexmap import hex_distance
 from app.services.stations import (
     InsufficientResources,
     missing_resources,
@@ -37,6 +39,22 @@ class ShipyardFull(Exception):
         self.build_slots = build_slots
         super().__init__(
             f"Shipyard is full — all {build_slots} build slots are in use"
+        )
+
+
+class InvalidMove(Exception):
+    """Raised when a ship is ordered to the sector it is already in."""
+
+
+class OutOfRange(Exception):
+    """Raised when a move destination is farther than the ship's speed."""
+
+    def __init__(self, distance: int, speed: int):
+        self.distance = distance
+        self.speed = speed
+        super().__init__(
+            f"Destination is {distance} sectors away — this ship can only move "
+            f"{speed} per turn"
         )
 
 
@@ -126,6 +144,62 @@ def progress_ship_builds(db: Session) -> int:
         db.delete(order)
         completed += 1
     return completed
+
+
+def set_move_order(
+    db: Session, ship: Ship, dest_tile: HexTile, user: User
+) -> ShipMoveOrder:
+    """Record (or replace) a ship's pending move to ``dest_tile``. Caller commits.
+
+    The destination must differ from the ship's current sector
+    (:class:`InvalidMove`) and be within the ship class's ``speed`` in hexes
+    (:class:`OutOfRange`). The move is *not* applied here — it resolves on the
+    next turn advance via :func:`progress_ship_moves`. Re-issuing overwrites the
+    existing order's destination rather than creating a second one.
+    """
+    if dest_tile.id == ship.hex_tile_id:
+        raise InvalidMove("The ship is already in that sector")
+
+    distance = hex_distance(
+        ship.hex_tile.q, ship.hex_tile.r, dest_tile.q, dest_tile.r
+    )
+    speed = ship.ship_class.speed
+    if distance > speed:
+        raise OutOfRange(distance, speed)
+
+    turn = get_state(db).current_turn
+    order = ship.move_order
+    if order is None:
+        order = ShipMoveOrder(
+            ship_id=ship.id,
+            dest_tile_id=dest_tile.id,
+            issued_by=user.id,
+            issued_on_turn=turn,
+        )
+        db.add(order)
+    else:
+        order.dest_tile_id = dest_tile.id
+        order.issued_by = user.id
+        order.issued_on_turn = turn
+    return order
+
+
+def progress_ship_moves(db: Session) -> int:
+    """Resolve every pending move: relocate the ship and clear the order.
+
+    Called from ``run_turn_hooks`` inside ``advance_turn``'s transaction, so
+    ships arrive atomically with the turn bump. Each order is validated to be in
+    range at issue time and the ship can't have moved since, so relocation is a
+    straight repoint of ``hex_tile_id``. Does **not** commit. Returns the number
+    of ships moved (for logging/tests).
+    """
+    orders = db.execute(select(ShipMoveOrder).options(selectinload(ShipMoveOrder.ship))).scalars().all()
+    moved = 0
+    for order in orders:
+        order.ship.hex_tile_id = order.dest_tile_id
+        db.delete(order)
+        moved += 1
+    return moved
 
 
 def add_ship(

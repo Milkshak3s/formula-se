@@ -22,21 +22,26 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin, require_commander
 from app.models.hexmap import HexTile
-from app.models.ship import Ship, ShipBuildOrder, ShipClass
+from app.models.ship import Ship, ShipBuildOrder, ShipClass, ShipMoveOrder
 from app.models.station import Station
 from app.models.user import User
 from app.schemas.ship import (
     ShipBuildCreate,
     ShipBuildOrderOut,
     ShipCreate,
+    ShipMoveCreate,
+    ShipMoveOrderOut,
     ShipOut,
 )
 from app.services.ships import (
     InsufficientResources,
+    InvalidMove,
     NotAShipyard,
+    OutOfRange,
     ShipyardFull,
     add_ship,
     queue_build,
+    set_move_order,
 )
 
 ships_router = APIRouter(prefix="/api/ships", tags=["ships"])
@@ -53,11 +58,28 @@ def _names_for(db: Session, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     return {uid: name for uid, name in rows}
 
 
-def _ship_out(ship: Ship, builder_name: str | None) -> ShipOut:
+def _move_out(order: ShipMoveOrder, issuer_name: str | None) -> ShipMoveOrderOut:
+    return ShipMoveOrderOut(
+        id=order.id,
+        ship_id=order.ship_id,
+        dest_tile_id=order.dest_tile_id,
+        dest_q=order.dest_tile.q,
+        dest_r=order.dest_tile.r,
+        issued_by=order.issued_by,
+        issued_by_name=issuer_name,
+        issued_on_turn=order.issued_on_turn,
+        created_at=order.created_at,
+    )
+
+
+def _ship_out(
+    ship: Ship, builder_name: str | None, issuer_name: str | None = None
+) -> ShipOut:
     return ShipOut(
         id=ship.id,
         ship_class_id=ship.ship_class_id,
         ship_class_name=ship.ship_class.name,
+        speed=ship.ship_class.speed,
         hex_tile_id=ship.hex_tile_id,
         q=ship.hex_tile.q,
         r=ship.hex_tile.r,
@@ -65,6 +87,11 @@ def _ship_out(ship: Ship, builder_name: str | None) -> ShipOut:
         built_by_name=builder_name,
         built_on_turn=ship.built_on_turn,
         created_at=ship.created_at,
+        move_order=(
+            _move_out(ship.move_order, issuer_name)
+            if ship.move_order is not None
+            else None
+        ),
     )
 
 
@@ -93,15 +120,26 @@ def list_ships(db: Session = Depends(get_db), _: User = Depends(get_current_user
         db.execute(
             select(Ship)
             .options(
-                selectinload(Ship.ship_class), selectinload(Ship.hex_tile)
+                selectinload(Ship.ship_class),
+                selectinload(Ship.hex_tile),
+                selectinload(Ship.move_order).selectinload(ShipMoveOrder.dest_tile),
             )
             .order_by(Ship.created_at)
         )
         .scalars()
         .all()
     )
-    names = _names_for(db, {s.built_by for s in ships})
-    return [_ship_out(s, names.get(s.built_by)) for s in ships]
+    ids = {s.built_by for s in ships}
+    ids |= {s.move_order.issued_by for s in ships if s.move_order is not None}
+    names = _names_for(db, ids)
+    return [
+        _ship_out(
+            s,
+            names.get(s.built_by),
+            names.get(s.move_order.issued_by) if s.move_order else None,
+        )
+        for s in ships
+    ]
 
 
 @ships_router.post("", response_model=ShipOut, status_code=status.HTTP_201_CREATED)
@@ -122,7 +160,11 @@ def grant_ship(
     db.commit()
     ship = db.execute(
         select(Ship)
-        .options(selectinload(Ship.ship_class), selectinload(Ship.hex_tile))
+        .options(
+            selectinload(Ship.ship_class),
+            selectinload(Ship.hex_tile),
+            selectinload(Ship.move_order),
+        )
         .where(Ship.id == ship.id)
     ).scalar_one()
     return _ship_out(ship, admin.display_name)
@@ -139,6 +181,59 @@ def scrap_ship(
     if ship is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ship not found")
     db.delete(ship)
+    db.commit()
+
+
+@ships_router.post("/{ship_id}/move", response_model=ShipMoveOrderOut)
+def move_ship(
+    ship_id: uuid.UUID,
+    payload: ShipMoveCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_commander),
+):
+    """Commander: order a ship to a sector within its speed. Resolves next turn."""
+    ship = db.execute(
+        select(Ship)
+        .options(
+            selectinload(Ship.ship_class),
+            selectinload(Ship.hex_tile),
+            selectinload(Ship.move_order),
+        )
+        .where(Ship.id == ship_id)
+    ).scalar_one_or_none()
+    if ship is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ship not found")
+    dest = db.get(HexTile, payload.dest_tile_id)
+    if dest is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sector not found")
+
+    try:
+        order = set_move_order(db, ship, dest, user)
+    except (InvalidMove, OutOfRange) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    db.commit()
+    order = db.execute(
+        select(ShipMoveOrder)
+        .options(selectinload(ShipMoveOrder.dest_tile))
+        .where(ShipMoveOrder.id == order.id)
+    ).scalar_one()
+    return _move_out(order, user.display_name)
+
+
+@ships_router.delete("/{ship_id}/move", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_move(
+    ship_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_commander),
+):
+    """Commander: call off a ship's pending move (before the next turn)."""
+    order = db.execute(
+        select(ShipMoveOrder).where(ShipMoveOrder.ship_id == ship_id)
+    ).scalar_one_or_none()
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No pending move for this ship")
+    db.delete(order)
     db.commit()
 
 
