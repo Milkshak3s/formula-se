@@ -147,6 +147,7 @@ export default function HexMapPage() {
             selectedId={selectedId}
             onSelect={setSelectedId}
             stationsByTile={stationsByTile}
+            shipsByTile={shipsByTile}
           />
           <SectorPanel
             tile={selected}
@@ -212,11 +213,13 @@ function HexGrid({
   selectedId,
   onSelect,
   stationsByTile,
+  shipsByTile,
 }: {
   map: HexMap;
   selectedId: string | null;
   onSelect: (id: string) => void;
   stationsByTile: Record<string, Station[]>;
+  shipsByTile: Record<string, Ship[]>;
 }) {
   const { placed, viewBox } = useMemo(() => {
     const placed = map.tiles.map((t) => {
@@ -284,6 +287,32 @@ function HexGrid({
                   </text>
                 </>
               )}
+              {(shipsByTile[tile.id]?.length ?? 0) > 0 && (
+                <>
+                  <title>
+                    {shipsByTile[tile.id].length}{" "}
+                    {shipsByTile[tile.id].length === 1 ? "ship" : "ships"}
+                  </title>
+                  <circle
+                    cx={x - SIZE * 0.42}
+                    cy={y - SIZE * 0.475}
+                    r={5.5}
+                    fill="#0d1020"
+                    stroke="#6ea8ff"
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={x - SIZE * 0.42}
+                    y={y - SIZE * 0.475 + 2.6}
+                    textAnchor="middle"
+                    fontSize="7"
+                    fontWeight="bold"
+                    fill="#6ea8ff"
+                  >
+                    {shipsByTile[tile.id].length}
+                  </text>
+                </>
+              )}
               {tile.name && (
                 <text
                   x={x}
@@ -299,6 +328,16 @@ function HexGrid({
           );
         })}
       </svg>
+      <div className="flex items-center gap-4 px-1 pt-2 text-[11px] text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-[3px] border-[1.5px] border-[#f0b64a]" />
+          Stations
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-[#6ea8ff]" />
+          Ships
+        </span>
+      </div>
     </Card>
   );
 }
