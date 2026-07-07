@@ -264,6 +264,7 @@ export interface HexTile {
   r: number;
   terrain: HexTerrain;
   name: string;
+  station_limit: number;
 }
 
 export interface TerrainMap {

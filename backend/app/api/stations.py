@@ -18,7 +18,11 @@ from app.models.hexmap import HexTile
 from app.models.station import Station, StationType
 from app.models.user import User
 from app.schemas.station import StationBuild, StationOut
-from app.services.stations import InsufficientResources, build_station
+from app.services.stations import (
+    InsufficientResources,
+    StationLimitReached,
+    build_station,
+)
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
 
@@ -91,6 +95,9 @@ def build(
 
     try:
         station = build_station(db, tile, station_type, user)
+    except StationLimitReached as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except InsufficientResources as exc:
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc

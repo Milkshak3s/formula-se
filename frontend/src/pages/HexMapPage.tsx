@@ -381,14 +381,30 @@ function SectorPanel({
       <div className="mt-4 border-t border-border pt-3">
         <div className="flex items-center justify-between">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Stations ({stations.length})
+            Stations ({stations.length}/{tile.station_limit})
           </div>
           {isCommander && (
-            <button className="btn-primary text-xs py-1" onClick={onBuild}>
+            <button
+              className="btn-primary text-xs py-1 disabled:opacity-50"
+              disabled={stations.length >= tile.station_limit}
+              title={
+                stations.length >= tile.station_limit
+                  ? "This sector is at its station limit"
+                  : undefined
+              }
+              onClick={onBuild}
+            >
               + Build
             </button>
           )}
         </div>
+        {stations.length >= tile.station_limit && (
+          <p className="text-[11px] text-muted/70 mt-1">
+            {tile.station_limit === 0
+              ? "This sector is locked — no stations can be built here."
+              : "At capacity. An admin can raise the sector's station limit."}
+          </p>
+        )}
         {stations.length ? (
           <ul className="mt-2 space-y-1.5">
             {stations.map((s) => (
@@ -571,6 +587,7 @@ function TileEditor({ tile }: { tile: HexTile }) {
   const toast = useToast();
   const [terrain, setTerrain] = useState<HexTerrain>(tile.terrain);
   const [name, setName] = useState(tile.name);
+  const [stationLimit, setStationLimit] = useState(tile.station_limit);
 
   // Re-sync the form when the selected tile changes.
   const key = tile.id;
@@ -579,10 +596,12 @@ function TileEditor({ tile }: { tile: HexTile }) {
     setLastKey(key);
     setTerrain(tile.terrain);
     setName(tile.name);
+    setStationLimit(tile.station_limit);
   }
 
   const save = useMutation({
-    mutationFn: () => api.updateHexTile(tile.id, { terrain, name }),
+    mutationFn: () =>
+      api.updateHexTile(tile.id, { terrain, name, station_limit: stationLimit }),
     onSuccess: () => {
       toast("Sector updated.", "success");
       qc.invalidateQueries({ queryKey: ["hex-map"] });
@@ -590,7 +609,10 @@ function TileEditor({ tile }: { tile: HexTile }) {
     onError: (e: any) => toast(e.message ?? "Could not update the sector", "error"),
   });
 
-  const dirty = terrain !== tile.terrain || name !== tile.name;
+  const dirty =
+    terrain !== tile.terrain ||
+    name !== tile.name ||
+    stationLimit !== tile.station_limit;
 
   return (
     <div className="mt-4 space-y-3 border-t border-border pt-3">
@@ -617,6 +639,19 @@ function TileEditor({ tile }: { tile: HexTile }) {
           placeholder="e.g. Kepler Belt"
           onChange={(e) => setName(e.target.value)}
         />
+      </div>
+      <div>
+        <label className="label">Station limit</label>
+        <input
+          className="input"
+          type="number"
+          min={0}
+          value={stationLimit}
+          onChange={(e) => setStationLimit(Math.max(0, Number(e.target.value)))}
+        />
+        <p className="text-xs text-muted mt-1">
+          Max stations Commanders can build here (0 locks the sector).
+        </p>
       </div>
       <button
         className="btn-primary w-full"

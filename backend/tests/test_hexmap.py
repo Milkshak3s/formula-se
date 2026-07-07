@@ -118,11 +118,19 @@ def test_terrain_spread_favours_deep_space():
 def test_schema_round_trips_from_attributes():
     import uuid
 
-    tile = HexTile(id=uuid.uuid4(), q=1, r=-2, terrain=HexTerrain.nebula, name="Rift")
+    tile = HexTile(
+        id=uuid.uuid4(),
+        q=1,
+        r=-2,
+        terrain=HexTerrain.nebula,
+        name="Rift",
+        station_limit=2,
+    )
     out = HexTileOut.model_validate(tile)
     assert out.q == 1 and out.r == -2
     assert out.terrain == HexTerrain.nebula
     assert out.name == "Rift"
+    assert out.station_limit == 2
 
     tm = TerrainMapOut(
         terrain=HexTerrain.planet, game_map_id=uuid.uuid4(), game_map_name="Barren World"

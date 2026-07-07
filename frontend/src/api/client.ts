@@ -244,8 +244,10 @@ export const api = {
       method: "POST",
       ...json({ radius, name }),
     }),
-  updateHexTile: (id: string, data: { terrain?: HexTerrain; name?: string }) =>
-    request<HexTile>(`/api/hex-map/tiles/${id}`, { method: "PATCH", ...json(data) }),
+  updateHexTile: (
+    id: string,
+    data: { terrain?: HexTerrain; name?: string; station_limit?: number },
+  ) => request<HexTile>(`/api/hex-map/tiles/${id}`, { method: "PATCH", ...json(data) }),
   setTerrainMap: (terrain: HexTerrain, game_map_id: string | null) =>
     request<HexMap>(`/api/hex-map/terrain-maps/${terrain}`, {
       method: "PUT",

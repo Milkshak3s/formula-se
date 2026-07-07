@@ -114,6 +114,8 @@ def update_tile(
         tile.terrain = payload.terrain
     if payload.name is not None:
         tile.name = payload.name
+    if payload.station_limit is not None:
+        tile.station_limit = payload.station_limit
     db.commit()
     db.refresh(tile)
     return HexTileOut.model_validate(tile)

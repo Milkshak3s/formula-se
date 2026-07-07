@@ -14,9 +14,11 @@ from app.models.station import (
     StationSlot,
     StationType,
 )
+from app.schemas.hexmap import HexTileUpdate
 from app.schemas.station import StationTypeCreate
 from app.services.stations import (
     InsufficientResources,
+    StationLimitReached,
     missing_resources,
     normalize_cost,
 )
@@ -125,3 +127,27 @@ def test_station_type_create_rejects_negative_cost():
             kind=StationKind.shipyard,
             cost={ResourceType.iron_ingot: -5},
         )
+
+
+# --- per-hex station limit ---
+def test_hex_tile_has_station_limit_column():
+    from app.models.hexmap import HexTile
+
+    assert "station_limit" in HexTile.__table__.c
+
+
+def test_station_limit_reached_reports_limit():
+    exc = StationLimitReached(1)
+    assert exc.limit == 1
+    assert "1" in str(exc) and "station" in str(exc)
+    # Pluralization is handled for readable messages.
+    assert "stations" in str(StationLimitReached(3))
+    assert "stations" not in str(StationLimitReached(1))
+
+
+def test_hex_tile_update_accepts_station_limit():
+    assert HexTileUpdate(station_limit=0).station_limit == 0
+    assert HexTileUpdate(station_limit=5).station_limit == 5
+    # Negative limits are rejected at the schema layer.
+    with pytest.raises(ValueError):
+        HexTileUpdate(station_limit=-1)

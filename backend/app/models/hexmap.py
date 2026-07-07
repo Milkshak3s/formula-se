@@ -59,6 +59,10 @@ class HexTile(UUIDPk, Timestamped, Base):
     )
     # Optional operator/lore label for a notable sector (empty for most hexes).
     name: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # Max stations a Commander may build on this sector (admin-configurable per
+    # hex; default 1). Enforced in services.stations.build_station. 0 locks the
+    # sector to new builds. Seeded/injected stations bypass this cap.
+    station_limit: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
 
 class SectorTerrainMap(Base):

@@ -15,6 +15,8 @@ class HexTileOut(BaseModel):
     r: int
     terrain: HexTerrain
     name: str
+    # Max stations a Commander may build here (admin-set; default 1, 0 = locked).
+    station_limit: int
 
 
 class TerrainMapOut(BaseModel):
@@ -46,3 +48,5 @@ class HexMapRegenerate(BaseModel):
 class HexTileUpdate(BaseModel):
     terrain: HexTerrain | None = None
     name: str | None = Field(default=None, max_length=200)
+    # 0 locks the sector to new builds; no upper cap.
+    station_limit: int | None = Field(default=None, ge=0)

@@ -32,6 +32,17 @@ class InsufficientResources(Exception):
         super().__init__(f"Insufficient resources ({detail})")
 
 
+class StationLimitReached(Exception):
+    """Raised when a sector already holds its admin-configured station cap."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        super().__init__(
+            f"This sector already has its maximum of {limit} "
+            f"station{'' if limit == 1 else 's'}"
+        )
+
+
 def normalize_cost(cost: dict) -> dict[ResourceType, int]:
     """Coerce a raw cost mapping to ``{ResourceType: positive int}``.
 
@@ -70,13 +81,28 @@ def build_station(
     ensure_balances(db)
     cost = normalize_cost(station_type.cost)
 
-    # Lock every resource row so the check-then-spend is atomic.
+    # Lock every resource row so the check-then-spend is atomic. Every build
+    # contends on these same rows, so builds campaign-wide serialize here — which
+    # also makes the per-tile capacity count below race-free (a concurrent build
+    # on this tile has either committed its station before we count, or is still
+    # waiting on this lock).
     rows = {
         b.resource: b
         for b in db.execute(
             select(ResourceBalance).with_for_update()
         ).scalars()
     }
+
+    # Per-hex station cap (admin-configurable; default 1). Checked before spend
+    # so a full sector never charges the treasury.
+    on_tile = db.execute(
+        select(func.count())
+        .select_from(Station)
+        .where(Station.hex_tile_id == tile.id)
+    ).scalar_one()
+    if on_tile >= tile.station_limit:
+        raise StationLimitReached(tile.station_limit)
+
     have = {r: rows[r].amount for r in rows}
     short = missing_resources(have, cost)
     if short:
