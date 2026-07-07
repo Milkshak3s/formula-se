@@ -141,7 +141,7 @@ export default function HexMapPage() {
           hint={isAdmin ? "Regenerate the grid to lay out the campaign map." : ""}
         />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <HexGrid
             map={map.data}
             selectedId={selectedId}
@@ -235,7 +235,7 @@ function HexGrid({
 
   return (
     <Card className="!p-3 bg-[#0d1020] border-[#232a44]">
-      <svg viewBox={viewBox} className="w-full h-auto max-h-[70vh]" role="img" aria-label="Campaign sector map">
+      <svg viewBox={viewBox} className="w-full h-auto max-h-[85vh]" role="img" aria-label="Campaign sector map">
         {placed.map(({ tile, x, y }) => {
           const meta = TERRAIN[tile.terrain];
           const isSel = tile.id === selectedId;
