@@ -66,6 +66,52 @@ def clamp_radius(radius: int) -> int:
     return max(MIN_RADIUS, min(MAX_RADIUS, radius))
 
 
+# Constellation-flavoured prefixes for auto-generated sector designations. Kept
+# short (<= 8 chars) so "Prefix-NNN" stays legible on the map's hex labels.
+SECTOR_PREFIXES: tuple[str, ...] = (
+    "Kepler", "Gliese", "Cygnus", "Lyra", "Orion", "Draco", "Hydra", "Vela",
+    "Corvus", "Auriga", "Perseus", "Phoenix", "Aquila", "Carina", "Tucana",
+    "Pyxis", "Norma", "Octans", "Mensa", "Dorado", "Volans", "Crux", "Lupus",
+    "Musca", "Grus", "Pavo", "Indus", "Antlia",
+)
+
+# The origin is the campaign's home sector; give it a stable, evocative name
+# rather than a catalogue designation.
+ORIGIN_SECTOR_NAME = "Homeport"
+
+
+def _mix64(n: int) -> int:
+    """A splitmix64 finalizer — scrambles an int to a well-distributed 64-bit hash.
+
+    Used so the sector-name prefix and number spread evenly over the grid (a
+    naive ``a*q ^ b*r`` clusters badly once taken modulo a small table size).
+    """
+    mask = 0xFFFFFFFFFFFFFFFF
+    n &= mask
+    n = ((n ^ (n >> 30)) * 0xBF58476D1CE4E5B9) & mask
+    n = ((n ^ (n >> 27)) * 0x94D049BB133111EB) & mask
+    return n ^ (n >> 31)
+
+
+def name_for(q: int, r: int) -> str:
+    """Deterministically name a sector from its coordinates (a catalogue code).
+
+    Like :func:`terrain_for`, this is pure and RNG-free so the map is
+    reproducible and testable. Produces designations such as ``"Kepler-472"``
+    from two independent coordinate hashes (prefix + 3-digit number), giving
+    enough variety that collisions across a map are rare. The origin gets a
+    fixed home name. Admins can still override any sector's name.
+    """
+    if q == 0 and r == 0:
+        return ORIGIN_SECTOR_NAME
+    # Pack the signed coords into one key, then derive two independent hashes so
+    # the prefix and number vary apart.
+    key = ((q & 0xFFFFFFFF) << 32) | (r & 0xFFFFFFFF)
+    prefix = SECTOR_PREFIXES[_mix64(key) % len(SECTOR_PREFIXES)]
+    number = 100 + (_mix64(key ^ 0x9E3779B97F4A7C15) % 900)
+    return f"{prefix}-{number}"
+
+
 def terrain_for(q: int, r: int) -> HexTerrain:
     """Deterministically pick a hex's terrain from its coordinates.
 
@@ -121,7 +167,8 @@ def generate_tiles(db: Session, radius: int) -> int:
     db.flush()
     coords = tiles_in_radius(radius)
     db.add_all(
-        HexTile(q=q, r=r, terrain=terrain_for(q, r)) for q, r in coords
+        HexTile(q=q, r=r, terrain=terrain_for(q, r), name=name_for(q, r))
+        for q, r in coords
     )
     return len(coords)
 
@@ -173,3 +220,21 @@ def ensure_tiles(db: Session) -> int:
     created = generate_tiles(db, m.radius)
     db.commit()
     return created
+
+
+def ensure_tile_names(db: Session) -> int:
+    """Backfill a generated name onto any sector that has none. Commits.
+
+    Idempotent and safe in ``run_seeds``: only touches tiles whose ``name`` is
+    empty, so admin-set names and already-generated names are left alone. This
+    is how existing campaigns (whose tiles predate auto-naming) pick up names
+    without a data migration. Returns the number of tiles named.
+    """
+    tiles = (
+        db.execute(select(HexTile).where(HexTile.name == "")).scalars().all()
+    )
+    for tile in tiles:
+        tile.name = name_for(tile.q, tile.r)
+    if tiles:
+        db.commit()
+    return len(tiles)

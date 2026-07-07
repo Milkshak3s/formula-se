@@ -15,8 +15,11 @@ from app.models.hexmap import (
 from app.schemas.hexmap import HexMapOut, HexTileOut, TerrainMapOut, TerrainMapUpdate
 from app.services.hexmap import (
     AXIAL_DIRECTIONS,
+    ORIGIN_SECTOR_NAME,
+    SECTOR_PREFIXES,
     clamp_radius,
     hex_distance,
+    name_for,
     neighbors,
     terrain_for,
     tiles_in_radius,
@@ -113,6 +116,32 @@ def test_terrain_spread_favours_deep_space():
         counts[t] = counts.get(t, 0) + 1
     # Empty space should dominate a generated map.
     assert counts[HexTerrain.deep_space] == max(counts.values())
+
+
+def test_name_for_origin_is_home():
+    assert name_for(0, 0) == ORIGIN_SECTOR_NAME
+    assert name_for(0, 0) != name_for(1, 0)
+
+
+def test_name_for_is_deterministic():
+    assert name_for(3, -2) == name_for(3, -2)
+
+
+def test_name_for_never_empty_and_follows_catalogue_format():
+    for q, r in tiles_in_radius(MAX_RADIUS):
+        name = name_for(q, r)
+        assert name  # never empty — that's the whole point
+        if (q, r) == (0, 0):
+            continue
+        prefix, _, number = name.partition("-")
+        assert prefix in SECTOR_PREFIXES
+        assert number.isdigit() and 100 <= int(number) <= 999
+
+
+def test_name_for_has_reasonable_variety():
+    # Across a full map, generated names shouldn't collapse to a handful.
+    names = {name_for(q, r) for q, r in tiles_in_radius(4)}  # 61 tiles
+    assert len(names) >= 55  # near-unique; a few collisions tolerated
 
 
 def test_schema_round_trips_from_attributes():

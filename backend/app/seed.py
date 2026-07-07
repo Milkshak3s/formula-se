@@ -16,7 +16,7 @@ from app.models.blockdata import BlockDefinition
 from app.models.enums import Role
 from app.models.user import User
 from app.services.blockdata import load_seed_json, upsert_block_defs
-from app.services.hexmap import ensure_tiles
+from app.services.hexmap import ensure_tile_names, ensure_tiles
 from app.services.resources import ensure_balances
 from app.services.stations import ensure_starter_station
 from app.services.turns import get_state
@@ -68,6 +68,8 @@ def run_seeds(db: Session) -> None:
     get_state(db)
     # Ensure the singleton sector map exists and its default grid is populated.
     ensure_tiles(db)
+    # Give every sector a readable name (backfills existing unnamed sectors).
+    ensure_tile_names(db)
     # Ensure the campaign resource treasury exists (5000 of each to start).
     ensure_balances(db)
     # Ensure the campaign's free starter shipyard exists on the origin sector.
